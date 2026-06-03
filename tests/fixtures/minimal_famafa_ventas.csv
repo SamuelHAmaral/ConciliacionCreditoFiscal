@@ -1,0 +1,4 @@
+Tipo Comprobante,Nro. Timbrado,IVA 10,Fecha Comprobante,Cliente
+110,11111111,300,05/04/2026,VentaA
+110,22222222,0,06/04/2026,VentaZero
+109,33333333,400,07/04/2026,WrongTipo

@@ -1,0 +1,2 @@
+# Optional: build Windows .exe (PyInstaller). Not required to run the engine or the Tk GUI with Python.
+pyinstaller>=6.0.0

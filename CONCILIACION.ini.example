@@ -1,0 +1,43 @@
+# Copie este archivo como CONCILIACION.ini (misma carpeta que Conciliar.bat)
+# y complete las rutas. Las rutas pueden ser absolutas o relativas a esta carpeta.
+#
+# Deje en blanco lo que no use: esa cuenta se omitira.
+#
+# Cada ejecucion genera en la carpeta "logs" dentro de [general] salida:
+#   - conciliacion_YYYYMMDD_HHMMSS.log  (detalle y errores)
+#   - audit_YYYYMMDD_HHMMSS.jsonl       (auditoria linea a linea en JSON)
+
+[general]
+# Carpeta donde se crean los Excel (se crea sola si no existe)
+salida = salidas
+
+# Carpeta con subcarpetas Cuenta * (mayorpc, SQL, FAMAFA). Si esta vacio, se busca
+# ../Automatizacion conciliaciones junto al proyecto.
+carpeta_insumos =
+
+# Solo para cuenta 1279 (filtro Fecha_Cont en el CSV del SQL)
+fecha_desde = 2026-04-01
+fecha_hasta = 2026-04-30
+# Opcional: tolerancia de montos para 1279 (ej.: 0.01 para diferencias de centesimos)
+amount_tolerance_1279 = 0.00
+
+# CSV exportado del SQL (cuenta 1279)
+sql_1279 =
+
+# Mismo CSV de FAMAFA Compras para 469 y 1280 (PowerBI / export)
+famafa_compras =
+
+# CSV de FAMAFA Ventas para 2874
+famafa_ventas =
+
+[1279]
+mayorpc =
+
+[469]
+mayorpc =
+
+[1280]
+mayorpc =
+
+[2874]
+mayorpc =

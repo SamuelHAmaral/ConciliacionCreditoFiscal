@@ -1,0 +1,57 @@
+# Metadatos de cuentas y reglas de conciliacion (configuracion centralizada).
+
+accounts:
+  "469":
+    profile_name: "IVA compras"
+    system_type: "famafa_compras"
+    ledger_side: "Debito"
+    match_column: "IVA 10"
+    required_columns:
+      famafa:
+        - "Tipo Comprobante"
+        - "IVA 10"
+        - "Fecha Emision"
+    filters:
+      tipo_comprobante: 109
+      timbrado_rule: "exclude"
+      timbrado_value: "12345678"
+
+  "1280":
+    profile_name: "Retenciones exterior"
+    system_type: "famafa_compras"
+    ledger_side: "Debito"
+    match_column: "IVA 10"
+    required_columns:
+      famafa:
+        - "Tipo Comprobante"
+        - "Nro. Timbrado"
+        - "IVA 10"
+        - "Fecha Emision"
+    filters:
+      tipo_comprobante: 109
+      timbrado_rule: "include"
+      timbrado_value: "12345678"
+
+  "1279":
+    profile_name: "NC emitidas"
+    system_type: "sql"
+    ledger_side: "Debito"
+    match_column: "IVA ML"
+    required_columns:
+      sql:
+        - "Fecha_Cont"
+        - "IVA ML"
+    filters: {}
+
+  "2874":
+    profile_name: "NC recibidas"
+    system_type: "famafa_ventas"
+    ledger_side: "Credito"
+    match_column: "IVA 10"
+    required_columns:
+      famafa:
+        - "Tipo Comprobante"
+        - "IVA 10"
+        - "Fecha Emision"
+    filters:
+      tipo_comprobante: 110

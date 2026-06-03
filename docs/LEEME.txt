@@ -1,0 +1,26 @@
+Conciliacion de credito fiscal (Windows)
+=========================================
+
+1. Extraiga este ZIP completo en una carpeta local (por ejemplo C:\Herramientas\ConciliacionCreditoFiscal).
+   Evite una carpeta sincronizada con OneDrive si Excel queda bloqueado al guardar.
+
+2. Abra la carpeta ConciliacionCreditoFiscal.
+
+3. Haga doble clic en ConciliacionCreditoFiscal.exe.
+
+4. Mantenga ConciliacionCreditoFiscal.exe y la carpeta _internal juntos.
+   No copie solo el .exe al Escritorio.
+
+5. En la aplicacion:
+   - Paso 1: elija donde guardar los Excel CUADRE
+   - Paso 2: elija la carpeta del mes (mayor + SQL / FAMAFA)
+   - Paso 3: Generar conciliacion
+   - Idioma de la interfaz: espanol por defecto; engranaje (Configuracion) para cambiar a English
+
+Carpeta de resultados por defecto (si no elige otra): Resultados conciliacion junto al .exe.
+
+Registros y preferencias:
+  - Logs de cada ejecucion: en la carpeta de salida elegida\logs\
+  - Preferencias de la app: %LOCALAPPDATA%\ConciliacionCreditoFiscal\settings.json
+
+No necesita instalar Python para usar este paquete.

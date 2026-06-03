@@ -1,0 +1,5 @@
+Tipo Comprobante,Nro. Timbrado,IVA 10,Fecha Comprobante,Proveedor
+109,99999999,100,01/04/2026,Alpha
+109,12345678,50,02/04/2026,Beta
+109,12345678,0,03/04/2026,ZeroIVA
+110,88888888,200,04/04/2026,WrongTipo
