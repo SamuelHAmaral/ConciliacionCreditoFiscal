@@ -1,0 +1,29 @@
+================================================================================
+  PARA USAR LA APLICACION (SIN PYTHON) - NO USE "Download ZIP" DEL CODIGO
+================================================================================
+
+El boton verde "Code" -> "Download ZIP" en GitHub descarga el CODIGO FUENTE
+(Python). Eso NO incluye el ejecutable.
+
+Para extraer y ejecutar como finanzas:
+
+  1. Abra en el navegador:
+     https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases
+
+  2. Descargue el archivo:
+     ConciliacionCreditoFiscal-Windows-x64-1.0.0.zip
+     (o el ZIP de la ultima version en "Latest")
+
+  3. Extraiga el ZIP completo en una carpeta local.
+
+  4. Abra la carpeta ConciliacionCreditoFiscal y ejecute:
+     ConciliacionCreditoFiscal.exe
+
+  5. Lea LEEME.txt dentro del ZIP extraido.
+
+Mantenga ConciliacionCreditoFiscal.exe y la carpeta _internal juntas.
+
+Enlace directo (cuando exista el Release v1.0.0):
+  https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases/latest/download/ConciliacionCreditoFiscal-Windows-x64-1.0.0.zip
+
+================================================================================

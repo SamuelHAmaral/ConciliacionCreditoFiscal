@@ -4,14 +4,17 @@ Aplicacion de escritorio para conciliar **credito fiscal**. Cruza exportaciones 
 
 **Fuera de alcance:** cuenta de debito fiscal atendida por la macro propia del banco.
 
-[![Descargar ultima version](https://img.shields.io/badge/Descargar-Ultima_version-2ea44f?style=for-the-badge)](../../releases)
+[![Descargar aplicacion Windows](https://img.shields.io/badge/Descargar-Aplicacion_Windows-2ea44f?style=for-the-badge)](https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases/latest)
+
+> **Importante:** El boton verde **Code → Download ZIP** descarga el **codigo fuente** (requiere Python).  
+> Para **extraer y ejecutar el .exe** sin instalar nada, use **[Releases](https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases)** (distintivo arriba) o lea [`DESCARGAR.txt`](DESCARGAR.txt).
 
 ## Descarga desde GitHub (extraer y usar, sin Python)
 
 Ruta recomendada para el equipo de finanzas.
 
-1. Abra **[Releases](../../releases)** en GitHub (enlace del distintivo arriba).
-2. Descargue **`ConciliacionCreditoFiscal-Windows-x64-*.zip`** de la ultima version.
+1. Abra **[Releases](https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases)** (no use "Download ZIP" en Code).
+2. Descargue **`ConciliacionCreditoFiscal-Windows-x64-*.zip`** de la ultima version (asset del Release).
 3. **Extraiga** el ZIP completo en una carpeta local (por ejemplo `C:\Herramientas\ConciliacionCreditoFiscal`). Evite sincronizar la carpeta de la app con OneDrive si Excel queda bloqueado al guardar.
 4. Lea **`LEEME.txt`** (en la raiz del ZIP extraido).
 5. Ejecute **`ConciliacionCreditoFiscal\ConciliacionCreditoFiscal.exe`**.
