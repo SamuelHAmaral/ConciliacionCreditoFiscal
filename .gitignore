@@ -1,9 +1,14 @@
 CONCILIACION.ini
+.conciliacion_settings.json
 salidas/
 salidas_gui/
 salidas_ui/
 output/
 output_uat/
+output_uat_compare/
+output_uat_real_ledgers/
+_xlsx_test_banner.xlsx
+big_test.part
 build/
 dist/
 .venv-build/
