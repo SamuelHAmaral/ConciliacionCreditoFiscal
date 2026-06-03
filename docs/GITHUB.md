@@ -4,9 +4,10 @@ El repositorio puede usarse de dos maneras: descarga del ejecutable (Releases) o
 
 ## Usuarios finales (sin Python): ZIP de Releases
 
-1. Abra el repositorio en GitHub.
-2. Vaya a **Releases** (lateral derecho o `/releases`).
-3. Descargue el ultimo **`ConciliacionCreditoFiscal-Windows-x64-*.zip`**.
+**No use** el boton verde **Code ? Download ZIP**: eso es codigo fuente, no el `.exe`.
+
+1. Abra **[Releases](https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases)** del repositorio.
+2. En la ultima version (**Latest**), descargue **`ConciliacionCreditoFiscal-Windows-x64-*.zip`** (asset del Release).
 4. Extraiga el ZIP en una carpeta local (por ejemplo `C:\Herramientas\ConciliacionCreditoFiscal`).
 5. Lea **`LEEME.txt`** en la raiz del ZIP extraido.
 6. Ejecute **`ConciliacionCreditoFiscal\ConciliacionCreditoFiscal.exe`**.
