@@ -72,6 +72,38 @@ _MESSAGES: dict[str, dict[str, str]] = {
     },
     "date_from": {"es": "Desde", "en": "From"},
     "date_to": {"es": "Hasta", "en": "To"},
+    "sql_date_hint": {
+        "es": "SQL: {desde} – {hasta} ({days} dia(s){rows_part})",
+        "en": "SQL: {desde} – {hasta} ({days} day(s){rows_part})",
+    },
+    "sql_date_hint_empty": {
+        "es": "Seleccione un archivo SQL para ver el rango de fechas.",
+        "en": "Select a SQL file to see its date range.",
+    },
+    "btn_use_sql_dates": {
+        "es": "Usar fechas del SQL",
+        "en": "Use SQL date range",
+    },
+    "btn_solo_ultimo_dia": {
+        "es": "Solo ultimo dia SQL",
+        "en": "SQL last day only",
+    },
+    "log_sql_last_day_applied": {
+        "es": "Rango 1279: solo ultimo dia SQL ({day})",
+        "en": "1279 range: SQL last day only ({day})",
+    },
+    "sql_date_hint_preset": {
+        "es": " Sugiera 'Solo ultimo dia SQL' si concilia como el modelo manual.",
+        "en": " Try 'SQL last day only' if matching the manual model.",
+    },
+    "sql_date_rows_suffix": {
+        "es": ", {count} filas",
+        "en": ", {count} rows",
+    },
+    "log_sql_dates_applied": {
+        "es": "Rango 1279 actualizado desde SQL: {desde} – {hasta}",
+        "en": "1279 range updated from SQL: {desde} – {hasta}",
+    },
     "verbose_log": {"es": "Log detallado", "en": "Detailed log"},
     "btn_browse": {"es": "Examinar...", "en": "Browse..."},
     "btn_run": {"es": "Generar conciliacion", "en": "Run reconciliation"},
@@ -83,6 +115,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "run_status_matching": {"es": "Conciliando registros...", "en": "Matching records..."},
     "run_status_writing": {"es": "Escribiendo CUADRE...", "en": "Writing CUADRE workbook..."},
     "run_status_uat": {"es": "Verificando calculos (UAT)...", "en": "Verifying calculations (UAT)..."},
+    "run_progress_counter": {
+        "es": "Cuenta {current} de {total}",
+        "en": "Account {current} of {total}",
+    },
     "summary_title": {"es": "Resumen final", "en": "Final summary"},
     "summary_rows": {"es": "Tipos completados: {ok}/{total}", "en": "Completed types: {ok}/{total}"},
     "summary_matched": {"es": "Filas conciliadas: {n}", "en": "Matched rows: {n}"},
@@ -91,6 +127,22 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "summary_pending_system": {"es": "Pendientes en Sistema: {n}", "en": "Pending in System: {n}"},
     "summary_integrity_ok": {"es": "Integridad: OK", "en": "Integrity: OK"},
     "summary_integrity_failed": {"es": "Integridad: revise filas", "en": "Integrity: check rows"},
+    "summary_model_title": {
+        "es": "Comparacion vs modelo CUADRE",
+        "en": "Comparison vs golden CUADRE model",
+    },
+    "summary_model_ok": {
+        "es": "{label}: {engine} conciliadas = modelo ({model})",
+        "en": "{label}: {engine} matched = model ({model})",
+    },
+    "summary_model_variance": {
+        "es": "{label}: {engine} conciliadas vs {model} modelo (delta {delta:+d})",
+        "en": "{label}: {engine} matched vs {model} model (delta {delta:+d})",
+    },
+    "summary_model_missing": {
+        "es": "{label}: sin modelo CUADRE de referencia",
+        "en": "{label}: no golden CUADRE model found",
+    },
     "summary_account_line": {
         "es": "{label}: {matched} / {ledger} / {system} — {integrity}",
         "en": "{label}: {matched} / {ledger} / {system} — {integrity}",
@@ -100,6 +152,15 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "show_log": {"es": "Mostrar actividad", "en": "Show activity"},
     "hide_log": {"es": "Ocultar actividad", "en": "Hide activity"},
     "btn_open_output": {"es": "Abrir carpeta de salida", "en": "Open output folder"},
+    "btn_open_cuadre": {"es": "Abrir CUADRE", "en": "Open CUADRE"},
+    "err_cuadre_missing": {
+        "es": "No se encontro el archivo CUADRE para {label}.",
+        "en": "CUADRE file not found for {label}.",
+    },
+    "opt_469_amount_only": {
+        "es": "469: cruce solo por importe (modo manual)",
+        "en": "469: match by amount only (manual mode)",
+    },
     "log_frame": {"es": " Actividad ", "en": " Activity "},
     "adv_sql": {"es": "SQL / Excel (NC emitidas)", "en": "SQL / Excel (issued credit notes)"},
     "adv_fc": {"es": "FAMAFA Compras", "en": "FAMAFA Purchases"},
@@ -189,7 +250,11 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "log_manifest": {"es": "Manifiesto: {path}", "en": "Manifest: {path}"},
     "log_account_ok": {"es": "  {label}: {name}", "en": "  {label}: {name}"},
     "log_account_err": {"es": "  {label}: ERROR: {err}", "en": "  {label}: ERROR: {err}"},
-    "log_qa_header": {"es": "Verificacion UAT (vs modelos CUADRE):", "en": "UAT verification (vs golden CUADRE models):"},
+    "log_qa_header": {"es": "Comparacion vs modelo CUADRE:", "en": "Comparison vs golden CUADRE model:"},
+    "log_qa_row_friendly": {
+        "es": "  {label}: motor {engine} / modelo {model} conciliadas ({status})",
+        "en": "  {label}: engine {engine} / model {model} matched ({status})",
+    },
     "log_qa_missing_model": {
         "es": "  Cuenta {account}: SIN MODELO ({detail})",
         "en": "  Account {account}: MODEL MISSING ({detail})",

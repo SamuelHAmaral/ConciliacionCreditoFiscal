@@ -1,8 +1,8 @@
-"""Tests for 1-to-1 matcher (amount + date)."""
+"""Tests for 1-to-1 matcher (amount + date and amount-only)."""
 
 import pandas as pd
 
-from reconcile.matcher import match_exact_one_to_one
+from reconcile.matcher import match_amount_only_one_to_one, match_exact_one_to_one
 
 
 def _d(s: str) -> pd.Timestamp:
@@ -54,6 +54,18 @@ def test_same_amount_different_date_no_match():
     assert matched.empty
     assert len(u_leg) == 1
     assert len(u_sys) == 1
+
+
+def test_amount_only_matches_different_dates():
+    ledger = pd.DataFrame(
+        {"_match_amount": [100.0], "_match_date": [_d("2026-04-01")]}
+    )
+    system = pd.DataFrame(
+        {"_match_amount": [100.0], "_match_date": [_d("2026-04-15")]}
+    )
+    matched, u_leg, u_sys = match_amount_only_one_to_one(ledger, system)
+    assert len(matched) == 1
+    assert u_leg.empty and u_sys.empty
 
 
 def test_single_pair_match():

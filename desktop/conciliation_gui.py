@@ -15,6 +15,7 @@ import sys
 import threading
 import tkinter as tk
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import TypeVar
@@ -47,7 +48,8 @@ if _batch_request is not None:
 
 import customtkinter as ctk
 
-from ingestion.folder_discovery import DiscoveredInputs, discover_inputs  # noqa: E402
+from ingestion.folder_discovery import DiscoveredInputs, discover_inputs
+from ingestion.sql_fecha_range import infer_fecha_range_from_sql, infer_last_sql_day, sql_fecha_coverage  # noqa: E402
 from ui.i18n import (  # noqa: E402
     DEFAULT_LANGUAGE,
     account_label,
@@ -204,6 +206,9 @@ class ConciliationApp(ctk.CTk):
         self.var_fh = tk.StringVar(value=saved.get("fecha_hasta", "2026-04-30"))
         self.var_tol_1279 = tk.StringVar(value=saved.get("amount_tolerance_1279", "0.01"))
         self.var_verbose = tk.BooleanVar(value=False)
+        self.var_match_469_amount_only = tk.BooleanVar(
+            value=saved.get("match_469_amount_only", "0") in ("1", "true", "True")
+        )
 
         self._ledger_vars: dict[str, tk.StringVar] = {a: tk.StringVar() for a in ACCOUNTS}
         self._secondary_buttons: list[ctk.CTkButton] = []
@@ -229,9 +234,12 @@ class ConciliationApp(ctk.CTk):
         self._summary_pending_ledger_var = tk.StringVar(value="")
         self._summary_pending_system_var = tk.StringVar(value="")
         self._summary_details_var = tk.StringVar(value="")
+        self._summary_model_var = tk.StringVar(value="")
         self._run_status_var = tk.StringVar(value="")
+        self._run_counter_var = tk.StringVar(value="")
         self._summary_details_visible = False
         self._controls_while_running: list[ctk.CTkBaseClass] = []
+        self._controls_while_reconciling: list[ctk.CTkBaseClass] = []
         self._live_log_handler: _TkLogHandler | None = None
         self._log_queue: queue.Queue[str] = queue.Queue(maxsize=5000)
         self._log_poll_id: str | None = None
@@ -241,6 +249,8 @@ class ConciliationApp(ctk.CTk):
         self._audit_file_offset: int = 0
         self._active_run_cfg: RunConfig | None = None
         self._run_job_total = 0
+        self._last_run_outputs: dict[str, Path] = {}
+        self._open_cuadre_buttons: dict[str, ctk.CTkButton] = {}
 
         self._build()
         apply_widget_theme(self._shell, self._colors)
@@ -268,6 +278,7 @@ class ConciliationApp(ctk.CTk):
             ("fv", self.var_fv),
         ):
             v.trace_add("write", lambda *_args, key=k: self._sync_path_entry(key))
+        self.var_sql.trace_add("write", lambda *_args: self._refresh_sql_date_hint())
         for acc in ACCOUNTS:
             self._ledger_vars[acc].trace_add("write", lambda *_args, a=acc: self._sync_path_entry(f"ledger_{a}"))
         for key in self._path_entries:
@@ -388,17 +399,53 @@ class ConciliationApp(ctk.CTk):
         self.dates_box = ctk.CTkFrame(parent, fg_color=self._subtle_card_fg(), corner_radius=6)
         self.dates_box.grid(row=2, column=0, **card_pad, pady=(0, 8))
         self.dates_box.grid_columnconfigure(1, weight=1)
-        self.dates_box.grid_columnconfigure(3, weight=1)
         self.lbl_dates = ctk.CTkLabel(self.dates_box, text="", anchor="w")
-        self.lbl_dates.grid(row=0, column=0, columnspan=4, sticky="ew", padx=10, pady=(10, 6))
+        self.lbl_dates.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 6))
         self.lbl_from = ctk.CTkLabel(self.dates_box, text="")
-        self.lbl_from.grid(row=1, column=0, sticky="w", padx=(10, 8), pady=(0, 10))
-        self.entry_fd = ctk.CTkEntry(self.dates_box, textvariable=self.var_fd)
-        self.entry_fd.grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=(0, 10))
+        self.lbl_from.grid(row=1, column=0, sticky="w", padx=(10, 8), pady=(0, 6))
+        self.entry_fd = ctk.CTkEntry(
+            self.dates_box,
+            textvariable=self.var_fd,
+            width=140,
+            placeholder_text="YYYY-MM-DD",
+        )
+        self.entry_fd.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
         self.lbl_to = ctk.CTkLabel(self.dates_box, text="")
-        self.lbl_to.grid(row=1, column=2, sticky="w", padx=(0, 8), pady=(0, 10))
-        self.entry_fh = ctk.CTkEntry(self.dates_box, textvariable=self.var_fh)
-        self.entry_fh.grid(row=1, column=3, sticky="ew", padx=(0, 10), pady=(0, 10))
+        self.lbl_to.grid(row=2, column=0, sticky="w", padx=(10, 8), pady=(0, 6))
+        self.entry_fh = ctk.CTkEntry(
+            self.dates_box,
+            textvariable=self.var_fh,
+            width=140,
+            placeholder_text="YYYY-MM-DD",
+        )
+        self.entry_fh.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+        self.lbl_sql_date_hint = ctk.CTkLabel(
+            self.dates_box,
+            text="",
+            anchor="w",
+            wraplength=420,
+            justify="left",
+        )
+        self.lbl_sql_date_hint.grid(
+            row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 6)
+        )
+        self.btn_use_sql_dates = ctk.CTkButton(
+            self.dates_box,
+            text="",
+            command=self._apply_sql_fecha_range,
+            width=160,
+        )
+        self.btn_use_sql_dates.grid(row=4, column=0, sticky="w", padx=10, pady=(0, 10))
+        self.btn_solo_ultimo_dia = ctk.CTkButton(
+            self.dates_box,
+            text="",
+            command=self._apply_sql_last_day,
+            width=160,
+        )
+        self.btn_solo_ultimo_dia.grid(row=4, column=1, sticky="w", padx=(0, 10), pady=(0, 10))
+        self._controls_while_reconciling.extend(
+            [self.entry_fd, self.entry_fh, self.btn_use_sql_dates, self.btn_solo_ultimo_dia]
+        )
 
         self.advanced_box = ctk.CTkFrame(parent, fg_color=self._colors.card, corner_radius=6)
         self.advanced_box.grid(row=3, column=0, **card_pad, pady=(0, 8))
@@ -416,6 +463,12 @@ class ConciliationApp(ctk.CTk):
         options_frame.grid_columnconfigure(0, weight=1)
         self.switch_verbose = ctk.CTkSwitch(options_frame, text="", variable=self.var_verbose)
         self.switch_verbose.grid(row=0, column=0, sticky="w", pady=(0, 6))
+        self.switch_469_amount_only = ctk.CTkSwitch(
+            options_frame,
+            text="",
+            variable=self.var_match_469_amount_only,
+        )
+        self.switch_469_amount_only.grid(row=1, column=0, sticky="w", pady=(0, 6))
 
         self.btn_run = make_primary_button(run_box, self._colors, text="", command=self._on_run)
         self.btn_run.configure(
@@ -429,8 +482,7 @@ class ConciliationApp(ctk.CTk):
                 self.btn_output,
                 self.btn_input,
                 self.switch_verbose,
-                self.entry_fd,
-                self.entry_fh,
+                self.switch_469_amount_only,
             ]
         )
 
@@ -535,17 +587,27 @@ class ConciliationApp(ctk.CTk):
         self.status_board.grid(row=1, column=0, **card_pad, pady=(0, 8))
         self.status_board.grid_columnconfigure(1, weight=1)
         self.lbl_status_summary = ctk.CTkLabel(self.status_board, text="")
-        self.lbl_status_summary.grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 8))
+        self.lbl_status_summary.grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(10, 8))
         for i, acc in enumerate(ACCOUNTS, start=1):
             dot = tk.Canvas(self.status_board, width=12, height=12, highlightthickness=0, bg=card_fg)
             dot.grid(row=i, column=0, padx=(10, 8), pady=5, sticky="w")
             txt = ctk.CTkLabel(self.status_board, text=account_label(acc, self._lang), anchor="w")
             txt.grid(row=i, column=1, sticky="w", pady=5)
             st = ctk.CTkLabel(self.status_board, text="")
-            st.grid(row=i, column=2, sticky="e", padx=(8, 10), pady=5)
+            st.grid(row=i, column=2, sticky="e", padx=(8, 4), pady=5)
+            btn_cuadre = ctk.CTkButton(
+                self.status_board,
+                text="",
+                width=100,
+                height=24,
+                command=lambda a=acc: self._open_cuadre(a),
+            )
+            btn_cuadre.grid(row=i, column=3, sticky="e", padx=(0, 10), pady=5)
+            btn_cuadre.grid_remove()
             self._status_dot_canvases[acc] = dot
             self._status_name_labels[acc] = txt
             self._status_text_labels[acc] = st
+            self._open_cuadre_buttons[acc] = btn_cuadre
 
         self.summary_box = ctk.CTkFrame(parent, fg_color=card_fg, corner_radius=6)
         self.summary_box.grid(row=2, column=0, **card_pad, pady=(0, 8))
@@ -567,6 +629,15 @@ class ConciliationApp(ctk.CTk):
         ctk.CTkLabel(self.summary_box, textvariable=self._summary_pending_system_var).pack(
             anchor="w", padx=10, pady=summary_item_pady
         )
+        self.lbl_summary_model = ctk.CTkLabel(
+            self.summary_box,
+            textvariable=self._summary_model_var,
+            justify="left",
+            anchor="w",
+            wraplength=440,
+        )
+        self.lbl_summary_model.pack(anchor="w", padx=10, pady=(4, 0))
+        self.lbl_summary_model.pack_forget()
         self.btn_summary_details = ctk.CTkButton(
             self.summary_box,
             text="",
@@ -602,9 +673,12 @@ class ConciliationApp(ctk.CTk):
         self.lbl_run_status = ctk.CTkLabel(
             self.progress_frame, textvariable=self._run_status_var, anchor="w"
         )
+        self.lbl_run_counter = ctk.CTkLabel(
+            self.progress_frame, textvariable=self._run_counter_var, anchor="e"
+        )
         self.progress = ctk.CTkProgressBar(self.progress_frame, height=10)
         self.progress.set(0)
-        self.progress.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.progress.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(6, 0))
         self.progress.grid_remove()
         self.progress_frame.grid_remove()
 
@@ -710,6 +784,7 @@ class ConciliationApp(ctk.CTk):
         try:
             w = max(220, self.right_card.winfo_width() - 48)
             self.lbl_summary_details.configure(wraplength=w)
+            self.lbl_summary_model.configure(wraplength=w)
         except tk.TclError:
             pass
 
@@ -792,7 +867,11 @@ class ConciliationApp(ctk.CTk):
         self.lbl_dates.configure(text=self.tr("date_section"))
         self.lbl_from.configure(text=self.tr("date_from"))
         self.lbl_to.configure(text=self.tr("date_to"))
+        self.btn_use_sql_dates.configure(text=self.tr("btn_use_sql_dates"))
+        self.btn_solo_ultimo_dia.configure(text=self.tr("btn_solo_ultimo_dia"))
+        self._refresh_sql_date_hint()
         self.switch_verbose.configure(text=self.tr("verbose_log"))
+        self.switch_469_amount_only.configure(text=self.tr("opt_469_amount_only"))
         self.lbl_adv_section.configure(text=self.tr("adv_section"))
         self.btn_run.configure(text=self.tr("btn_run") if not self._running else self.tr("btn_run_busy"))
         self.btn_open_output.configure(text=self.tr("btn_open_output"))
@@ -847,6 +926,13 @@ class ConciliationApp(ctk.CTk):
                 text = self.tr("status_not_loaded")
             dot.create_oval(1, 1, 11, 11, fill=color, outline=color)
             st.configure(text=text)
+            btn = self._open_cuadre_buttons.get(acc)
+            if btn is not None:
+                if state == "ready" and acc in self._last_run_outputs:
+                    btn.configure(text=self.tr("btn_open_cuadre"))
+                    btn.grid()
+                else:
+                    btn.grid_remove()
 
     def _draw_run_spinner(self) -> None:
         c = self._spinner_canvas
@@ -877,6 +963,7 @@ class ConciliationApp(ctk.CTk):
         self.progress_frame.grid()
         self._spinner_canvas.grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.lbl_run_status.grid(row=0, column=1, sticky="ew")
+        self.lbl_run_counter.grid(row=0, column=2, sticky="e", padx=(8, 0))
         self.progress.grid()
         if self._spinner_tick_id is None:
             self._animate_run_spinner()
@@ -924,12 +1011,41 @@ class ConciliationApp(ctk.CTk):
         else:
             value = 0.12 + 0.78 * (done / total)
         self._set_progress_value(value)
+        current = min(done + 1, total) if done < total else total
+        self._run_counter_var.set(
+            self.tr("run_progress_counter", current=str(current), total=str(total))
+        )
+
+    def _open_cuadre(self, account: str) -> None:
+        path = self._last_run_outputs.get(account)
+        if path is None or not path.is_file():
+            messagebox.showinfo(
+                self.tr("info_title"),
+                self.tr("err_cuadre_missing", label=account_label(account, self._lang)),
+            )
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.run(["open", str(path)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(path)], check=False)
+        except OSError as e:
+            messagebox.showerror(self.tr("err_generic"), str(e))
+
+    def _set_reconciling_ui(self, reconciling: bool) -> None:
+        state = "disabled" if reconciling else "normal"
+        for ctrl in self._controls_while_reconciling:
+            ctrl.configure(state=state)
 
     def _set_running_ui(self, running: bool, *, status_tick: bool = True) -> None:
         self._running = running
         self.btn_run.configure(state="disabled" if running else "normal")
         for ctrl in self._controls_while_running:
             ctrl.configure(state="disabled" if running else "normal")
+        if not running:
+            self._set_reconciling_ui(False)
         if running:
             self._set_progress_value(0.0)
             self._show_run_progress_ui()
@@ -943,6 +1059,7 @@ class ConciliationApp(ctk.CTk):
                 self.after_cancel(self._run_status_tick_id)
                 self._run_status_tick_id = None
             self._run_status_var.set("")
+            self._run_counter_var.set("")
         self.btn_run.configure(text=self.tr("btn_run_busy") if running else self.tr("btn_run"))
 
     def _tick_running_status(self) -> None:
@@ -965,14 +1082,67 @@ class ConciliationApp(ctk.CTk):
     def _update_dates_visibility(self) -> None:
         if self._include_vars["1279"].get() and self._ledger_vars["1279"].get().strip():
             self.dates_box.grid()
+            self._refresh_sql_date_hint()
         else:
             self.dates_box.grid_remove()
+
+    def _format_sql_date_hint(self, coverage) -> str:
+        if coverage is None:
+            return self.tr("sql_date_hint_empty")
+        desde = datetime.strptime(coverage.fecha_desde, "%Y-%m-%d").strftime("%d/%m/%Y")
+        hasta = datetime.strptime(coverage.fecha_hasta, "%Y-%m-%d").strftime("%d/%m/%Y")
+        rows_part = ""
+        if coverage.row_count is not None:
+            rows_part = self.tr("sql_date_rows_suffix", count=str(coverage.row_count))
+        return self.tr(
+            "sql_date_hint",
+            desde=desde,
+            hasta=hasta,
+            days=str(coverage.distinct_days),
+            rows_part=rows_part,
+        ) + (
+            self.tr("sql_date_hint_preset") if coverage.distinct_days <= 2 else ""
+        )
+
+    def _refresh_sql_date_hint(self) -> None:
+        if not hasattr(self, "lbl_sql_date_hint"):
+            return
+        path = self.var_sql.get().strip()
+        coverage = sql_fecha_coverage(Path(path)) if path else None
+        self.lbl_sql_date_hint.configure(text=self._format_sql_date_hint(coverage))
+
+    def _apply_sql_fecha_range(self) -> None:
+        path = self.var_sql.get().strip()
+        if not path:
+            return
+        fd, fh = infer_fecha_range_from_sql(Path(path))
+        if not fd or not fh:
+            return
+        self.var_fd.set(fd)
+        self.var_fh.set(fh)
+        self._refresh_sql_date_hint()
+        if not self._running:
+            self._log(self.tr("log_sql_dates_applied", desde=fd, hasta=fh))
+
+    def _apply_sql_last_day(self) -> None:
+        path = self.var_sql.get().strip()
+        if not path:
+            return
+        day = infer_last_sql_day(Path(path))
+        if not day:
+            return
+        self.var_fd.set(day)
+        self.var_fh.set(day)
+        self._refresh_sql_date_hint()
+        if not self._running:
+            self._log(self.tr("log_sql_last_day_applied", day=day))
 
     def _pick_output_folder(self) -> None:
         _browse_dir(self.var_salida, self.tr("dialog_output_dir"))
 
     def _browse_sql(self) -> None:
         _browse_file(self.var_sql, self.tr("dialog_sql"), file_types(self._lang))
+        self._refresh_sql_date_hint()
 
     def _browse_fc(self) -> None:
         _browse_file(self.var_fc, self.tr("dialog_fc"), file_types(self._lang))
@@ -1059,6 +1229,7 @@ class ConciliationApp(ctk.CTk):
 
         self._sync_discovered_paths()
         self._update_dates_visibility()
+        self._refresh_sql_date_hint()
         save_settings(
             _ROOT,
             insumos=str(path),
@@ -1328,9 +1499,41 @@ class ConciliationApp(ctk.CTk):
             fecha_desde=self.var_fd.get().strip() or None,
             fecha_hasta=self.var_fh.get().strip() or None,
             amount_tolerance_1279=tol_1279 if has_1279 else 0.0,
+            match_469_amount_only=self.var_match_469_amount_only.get(),
         )
 
-    def _show_summary(self, results: list[object]) -> None:
+    def _format_model_compare_lines(self, qa_rows: list[UATVariance]) -> list[str]:
+        lines: list[str] = []
+        for row in qa_rows:
+            label = account_label(row.account, self._lang)
+            if row.status == "missing_model":
+                lines.append(self.tr("summary_model_missing", label=label))
+            elif row.status == "ok":
+                lines.append(
+                    self.tr(
+                        "summary_model_ok",
+                        label=label,
+                        engine=str(row.output_matched),
+                        model=str(row.model_matched),
+                    )
+                )
+            else:
+                lines.append(
+                    self.tr(
+                        "summary_model_variance",
+                        label=label,
+                        engine=str(row.output_matched),
+                        model=str(row.model_matched),
+                        delta=row.delta_matched,
+                    )
+                )
+        return lines
+
+    def _show_summary(
+        self,
+        results: list[object],
+        qa_rows: list[UATVariance] | None = None,
+    ) -> None:
         ok_n = sum(1 for r in results if getattr(r, "ok", False))
         total = len(results)
         matched = 0
@@ -1369,6 +1572,15 @@ class ConciliationApp(ctk.CTk):
         self._summary_pending_ledger_var.set(self.tr("summary_pending_ledger", n=str(pending_ledger)))
         self._summary_pending_system_var.set(self.tr("summary_pending_system", n=str(pending_system)))
         self._summary_details_var.set("\n".join(details_rows))
+        if qa_rows:
+            model_lines = self._format_model_compare_lines(qa_rows)
+            self._summary_model_var.set(
+                self.tr("summary_model_title") + "\n" + "\n".join(model_lines)
+            )
+            self.lbl_summary_model.pack(anchor="w", padx=10, pady=(4, 0))
+        else:
+            self._summary_model_var.set("")
+            self.lbl_summary_model.pack_forget()
         self._summary_details_visible = False
         self.lbl_summary_details.pack_forget()
         self.summary_box.grid()
@@ -1432,7 +1644,13 @@ class ConciliationApp(ctk.CTk):
         self._detach_live_log_handler()
         self._set_running_ui(False)
         self._active_run_cfg = None
-        self._show_summary(results)
+        self._show_summary(results, qa_rows)
+        self._last_run_outputs = {
+            r.account: r.output
+            for r in results
+            if r.ok and r.output is not None
+        }
+        self._refresh_status_board()
         ok_n = sum(1 for r in results if r.ok)
         for r in results:
             if r.ok and r.output:
@@ -1456,29 +1674,6 @@ class ConciliationApp(ctk.CTk):
                     lines.append(self.tr("log_account_ok", label=label, name=r.output.name))
                 elif r.error:
                     lines.append(self.tr("log_account_err", label=label, err=r.error or ""))
-            if qa_rows:
-                lines.append(self.tr("log_qa_header"))
-                for row in qa_rows:
-                    if row.status == "missing_model":
-                        lines.append(
-                            self.tr(
-                                "log_qa_missing_model",
-                                account=row.account,
-                                detail=row.detail,
-                            )
-                        )
-                    else:
-                        lines.append(
-                            self.tr(
-                                "log_qa_row",
-                                account=row.account,
-                                dt=str(row.delta_total),
-                                dm=str(row.delta_matched),
-                                status=row.status,
-                            )
-                        )
-                if qa_report_path:
-                    lines.append(self.tr("log_qa_report", path=str(qa_report_path)))
         else:
             lines = [
                 self.tr("activity_run_done", ok=str(ok_n), total=str(len(results))),
@@ -1488,6 +1683,30 @@ class ConciliationApp(ctk.CTk):
                 label = account_label(r.account, self._lang)
                 if r.error:
                     lines.append(self.tr("activity_account_err", label=label, err=r.error or ""))
+
+        if qa_rows:
+            lines.append(self.tr("log_qa_header"))
+            for row in qa_rows:
+                if row.status == "missing_model":
+                    lines.append(
+                        self.tr(
+                            "log_qa_missing_model",
+                            account=row.account,
+                            detail=row.detail,
+                        )
+                    )
+                else:
+                    lines.append(
+                        self.tr(
+                            "log_qa_row_friendly",
+                            label=account_label(row.account, self._lang),
+                            engine=str(row.output_matched),
+                            model=str(row.model_matched),
+                            status=row.status,
+                        )
+                    )
+            if qa_report_path:
+                lines.append(self.tr("log_qa_report", path=str(qa_report_path)))
 
         def show_dialog() -> None:
             if ok_n:
@@ -1530,6 +1749,7 @@ class ConciliationApp(ctk.CTk):
             amount_tolerance_1279=self.var_tol_1279.get(),
             language=self._lang,
             appearance=self._appearance,
+            match_469_amount_only="1" if self.var_match_469_amount_only.get() else "0",
         )
 
         self._set_running_ui(True, status_tick=False)
@@ -1555,6 +1775,7 @@ class ConciliationApp(ctk.CTk):
                     self.summary_box.grid_remove()
                     self._clear_log()
                     self._log(self.tr("log_running"))
+                    self._set_reconciling_ui(True)
                     if self.var_verbose.get():
                         self._log(self.tr("log_output", path=str(cfg.salida)))
                     for acc in ACCOUNTS:

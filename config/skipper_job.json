@@ -1,0 +1,40 @@
+{
+  "name": "conciliacion-credito-fiscal",
+  "description": "Conciliacion de credito fiscal — batch CUADRE generation",
+  "command": "py -3 scripts/skipper_run.py",
+  "arguments": [
+    "--insumos",
+    "${INPUT_INSUMOS}",
+    "--salida",
+    "${OUTPUT_SALIDA}",
+    "--fecha-desde",
+    "${FECHA_DESDE}",
+    "--fecha-hasta",
+    "${FECHA_HASTA}"
+  ],
+  "optional_arguments": [
+    "--469-amount-only",
+    "--models-root",
+    "${MODELS_ROOT}",
+    "--verbose"
+  ],
+  "inputs": [
+    {
+      "id": "INPUT_INSUMOS",
+      "description": "Carpeta del mes con subcarpetas Cuenta 1279/469/1280/2874"
+    }
+  ],
+  "outputs": [
+    {
+      "glob": "CUADRE_*_reconciliacion.xlsx",
+      "description": "Libros CUADRE por cuenta"
+    },
+    {
+      "glob": "logs/**",
+      "description": "Logs, audit JSONL, qa_variance CSV"
+    }
+  ],
+  "environment": {
+    "PYTHONPATH": "src;."
+  }
+}

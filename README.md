@@ -25,6 +25,7 @@ Mantenga **`ConciliacionCreditoFiscal.exe`** y la carpeta **`_internal`** en el 
 |-----------|--------|
 | Usar sin instalar Python | ZIP de Releases (pasos anteriores) |
 | Ejecutar desde codigo (desarrollo) | Clonar repo → `pip install -r requirements.txt` → [`ConciliacionGUI.bat`](ConciliacionGUI.bat) |
+| Guia para operadores | [`docs/GUIA_OPERADOR.md`](docs/GUIA_OPERADOR.md) |
 | Publicar una version nueva | Etiqueta `v1.0.0` y push, o ver [`docs/GITHUB.md`](docs/GITHUB.md) |
 
 El ZIP **no** se guarda en git (es muy pesado). Se genera en cada etiqueta de release o manualmente con [`scripts/package_release.ps1`](scripts/package_release.ps1).

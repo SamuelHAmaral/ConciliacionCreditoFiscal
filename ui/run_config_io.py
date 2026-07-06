@@ -31,6 +31,7 @@ def run_config_to_dict(
         "fecha_desde": cfg.fecha_desde,
         "fecha_hasta": cfg.fecha_hasta,
         "amount_tolerance_1279": cfg.amount_tolerance_1279,
+        "match_469_amount_only": cfg.match_469_amount_only,
         "verbose": verbose,
         "skip_input_validation": skip_input_validation,
         "uat_verify": uat_verify,
@@ -55,6 +56,7 @@ def run_config_from_dict(data: dict[str, Any]) -> RunConfig:
         fecha_desde=data.get("fecha_desde"),
         fecha_hasta=data.get("fecha_hasta"),
         amount_tolerance_1279=float(data.get("amount_tolerance_1279") or 0.0),
+        match_469_amount_only=bool(data.get("match_469_amount_only")),
     )
 
 

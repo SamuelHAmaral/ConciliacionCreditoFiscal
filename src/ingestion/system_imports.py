@@ -212,12 +212,30 @@ def load_sql_excel(
 
 _EXCEL_SUFFIXES = {".xlsx", ".xls", ".xlsm"}
 
+SystemFileCache = dict[tuple[str, int, str, Any, Any], pd.DataFrame]
+
+
+def _system_file_cache_key(
+    path: Path,
+    source: SystemSource,
+    *,
+    sheet_name: str | int = 0,
+    **kwargs: Any,
+) -> tuple[str, int, str, Any, Any]:
+    resolved = path.resolve()
+    try:
+        mtime_ns = resolved.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = 0
+    return (str(resolved), mtime_ns, source, kwargs.get("nrows"), sheet_name)
+
 
 def load_system_file(
     filepath: str | Path,
     source: SystemSource,
     *,
     sheet_name: str | int = 0,
+    cache: SystemFileCache | None = None,
     **kwargs: Any,
 ) -> pd.DataFrame:
     """
@@ -227,13 +245,26 @@ def load_system_file(
     ----------
     source:
         ``sql`` for account 1279 extracts; ``famafa`` for PowerBI / FAMAFA exports.
+    cache:
+        Optional mutable dict shared across a batch run to avoid re-parsing the same file.
     """
     path = Path(filepath)
+    key = _system_file_cache_key(path, source, sheet_name=sheet_name, **kwargs)
+    if cache is not None and key in cache:
+        logger.debug("Cache hit for %s (%s)", path.name, source)
+        return cache[key]
+
     suffix = path.suffix.lower()
     if suffix in _EXCEL_SUFFIXES:
         if source == "sql":
-            return load_sql_excel(path, sheet_name=sheet_name, **kwargs)
-        return load_famafa_excel(path, sheet_name=sheet_name, **kwargs)
-    if source == "sql":
-        return load_sql_extract(path, **kwargs)
-    return load_famafa_csv(path, **kwargs)
+            df = load_sql_excel(path, sheet_name=sheet_name, **kwargs)
+        else:
+            df = load_famafa_excel(path, sheet_name=sheet_name, **kwargs)
+    elif source == "sql":
+        df = load_sql_extract(path, **kwargs)
+    else:
+        df = load_famafa_csv(path, **kwargs)
+
+    if cache is not None:
+        cache[key] = df
+    return df

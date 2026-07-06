@@ -1,9 +1,10 @@
-"""Reusable UAT compare helpers for engine vs golden CUADRE outputs."""
+"""Reusable helpers to compare engine CUADRE outputs vs manual reference models."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -33,50 +34,89 @@ class UATVariance:
 def find_model(account: str, root: Path) -> Path | None:
     pattern = _MODEL_GLOBS[account]
     hits: list[Path] = []
-    for sub in root.iterdir():
-        if sub.is_dir() and account in sub.name:
-            hits.extend(sub.glob(pattern))
-    if not hits:
-        hits = list(root.rglob(pattern))
+    if root.is_dir():
+        for sub in root.iterdir():
+            if sub.is_dir() and account in sub.name:
+                hits.extend(sub.glob(pattern))
+        if not hits:
+            hits = list(root.rglob(pattern))
     return max(hits, key=lambda p: p.stat().st_mtime) if hits else None
 
 
-def count_model_rows(model_path: Path, account: str) -> dict[str, int]:
-    xl = pd.ExcelFile(model_path)
+def _find_cuadre_header_row(path: Path, sheet: str) -> int:
+    raw = pd.read_excel(path, sheet_name=sheet, header=None, nrows=12)
+    for i in range(len(raw)):
+        cells = [str(x).strip() for x in raw.iloc[i].tolist() if pd.notna(x)]
+        if "Cuenta" in cells and any(
+            c in cells for c in ("Débitos", "Debitos", "Créditos", "Creditos")
+        ):
+            return i
+    return 0
+
+
+def _load_cuadre_sheet(path: Path, account: str) -> pd.DataFrame:
+    xl = pd.ExcelFile(path)
     sheet = account if account in xl.sheet_names else xl.sheet_names[0]
-    df = pd.read_excel(model_path, sheet_name=sheet, header=0)
+    header = _find_cuadre_header_row(path, sheet)
+    df = pd.read_excel(path, sheet_name=sheet, header=header)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def _count_cuadre_sections(df: pd.DataFrame, account: str) -> dict[str, int]:
     if df.empty:
-        return {"total": 0, "matched_cruce_zero": 0}
-    cruce_col = next((c for c in df.columns if str(c).strip().upper() == "CRUCE"), None)
-    matched = 0
-    if cruce_col is not None:
-        cruce = pd.to_numeric(df[cruce_col], errors="coerce")
-        matched = int((cruce == 0).sum())
-    return {"total": len(df), "matched_cruce_zero": matched}
+        return {"total": 0, "matched": 0, "pend_ledger": 0, "pend_system": 0}
+    ledger_amt = "Créditos" if account == "2874" else "Débitos"
+    sys_amt = "IVA ML" if account == "1279" else "IVA 10"
+    has_leg = df[ledger_amt].notna() if ledger_amt in df.columns else pd.Series([False] * len(df))
+    has_sys = df[sys_amt].notna() if sys_amt in df.columns else pd.Series([False] * len(df))
+    matched = int((has_leg & has_sys).sum())
+    pend_leg = int((has_leg & ~has_sys).sum())
+    pend_sys = int((~has_leg & has_sys).sum())
+    return {
+        "total": matched + pend_leg + pend_sys,
+        "matched": matched,
+        "pend_ledger": pend_leg,
+        "pend_system": pend_sys,
+    }
+
+
+def count_model_rows(model_path: Path, account: str) -> dict[str, int]:
+    df = _load_cuadre_sheet(model_path, account)
+    return _count_cuadre_sections(df, account)
 
 
 def count_engine_output(path: Path, account: str) -> dict[str, int]:
-    xl = pd.ExcelFile(path)
-    sheet = account if account in xl.sheet_names else xl.sheet_names[0]
-    df = pd.read_excel(path, sheet_name=sheet, header=0)
-    if df.empty:
-        return {"total": 0, "matched_cruce_zero": 0}
-    ledger_amt = "Cr\u00e9ditos" if account == "2874" else "D\u00e9bitos"
-    has_ledger = df[ledger_amt].notna() if ledger_amt in df.columns else pd.Series([False] * len(df))
-    sys_amt = "IVA ML" if account == "1279" else "IVA 10"
-    has_system = df[sys_amt].notna() if sys_amt in df.columns else pd.Series([False] * len(df))
-    matched_rows = int((has_ledger & has_system).sum())
-    return {"total": len(df), "matched_cruce_zero": matched_rows}
+    df = _load_cuadre_sheet(path, account)
+    sections = _count_cuadre_sections(df, account)
+    return {"total": sections["total"], "matched_cruce_zero": sections["matched"]}
+
+
+def _engine_counts(
+    path: Path,
+    account: str,
+    metrics: dict[str, Any] | None,
+) -> dict[str, int]:
+    if metrics:
+        matched = int(metrics.get("matched_rows") or 0)
+        pend_leg = int(metrics.get("unmatched_ledger_rows") or 0)
+        pend_sys = int(metrics.get("unmatched_system_rows") or 0)
+        return {"total": matched + pend_leg + pend_sys, "matched": matched}
+    sections = _count_cuadre_sections(_load_cuadre_sheet(path, account), account)
+    return {"total": sections["total"], "matched": sections["matched"]}
 
 
 def compare_with_golden(
     outputs_by_account: dict[str, Path],
     *,
     models_root: Path,
+    output_metrics: dict[str, dict[str, Any]] | None = None,
 ) -> list[UATVariance]:
     rows: list[UATVariance] = []
+    metrics = output_metrics or {}
     for account, out in outputs_by_account.items():
         model = find_model(account, models_root) if models_root.is_dir() else None
+        engine = _engine_counts(out, account, metrics.get(account))
         if model is None:
             rows.append(
                 UATVariance(
@@ -84,31 +124,30 @@ def compare_with_golden(
                     model_path=None,
                     output_path=out,
                     model_total=0,
-                    output_total=0,
+                    output_total=engine["total"],
                     model_matched=0,
-                    output_matched=0,
-                    delta_total=0,
-                    delta_matched=0,
+                    output_matched=engine["matched"],
+                    delta_total=engine["total"],
+                    delta_matched=engine["matched"],
                     status="missing_model",
                     detail="No se encontro modelo CUADRE de referencia",
                 )
             )
             continue
-        m = count_model_rows(model, account)
-        e = count_engine_output(out, account)
+        model_sections = count_model_rows(model, account)
         rows.append(
             UATVariance(
                 account=account,
                 model_path=model,
                 output_path=out,
-                model_total=m["total"],
-                output_total=e["total"],
-                model_matched=m["matched_cruce_zero"],
-                output_matched=e["matched_cruce_zero"],
-                delta_total=e["total"] - m["total"],
-                delta_matched=e["matched_cruce_zero"] - m["matched_cruce_zero"],
+                model_total=model_sections["total"],
+                output_total=engine["total"],
+                model_matched=model_sections["matched"],
+                output_matched=engine["matched"],
+                delta_total=engine["total"] - model_sections["total"],
+                delta_matched=engine["matched"] - model_sections["matched"],
                 status="ok"
-                if e["total"] == m["total"] and e["matched_cruce_zero"] == m["matched_cruce_zero"]
+                if engine["matched"] == model_sections["matched"]
                 else "variance",
                 detail="",
             )

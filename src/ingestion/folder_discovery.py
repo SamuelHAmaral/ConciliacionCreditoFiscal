@@ -10,7 +10,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 ACCOUNTS = ("1279", "469", "1280", "2874")
-_DATE_IN_NAME = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _INSUMOS_DIR_NAME = "Automatizaci\u00f3n conciliaciones"
 
 
@@ -51,15 +50,7 @@ def _find_in_dir(directory: Path, pattern: str) -> list[Path]:
     return list(directory.glob(pattern))
 
 
-def infer_fecha_range_from_sql(sql_path: Path | None) -> tuple[str | None, str | None]:
-    """Infer 1279 date filter from SQL filename (e.g. Cuenta1279_2026-04-30)."""
-    if sql_path is None:
-        return None, None
-    m = _DATE_IN_NAME.search(sql_path.name)
-    if not m:
-        return None, None
-    day = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    return day, day
+from ingestion.sql_fecha_range import infer_fecha_range_from_sql
 
 
 def discover_inputs(root: str | Path) -> DiscoveredInputs:

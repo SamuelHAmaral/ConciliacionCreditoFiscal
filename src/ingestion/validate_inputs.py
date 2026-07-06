@@ -9,16 +9,13 @@ from typing import Iterable
 import pandas as pd
 
 from config.account_config import required_columns_for
-from ingestion.folder_discovery import infer_fecha_range_from_sql
+from ingestion.ledger_parser import parse_ledger
+from ingestion.sql_fecha_range import infer_fecha_range_from_sql, read_sql_fecha_cont_range
 from ingestion.system_imports import (
-    load_famafa_csv,
-    load_famafa_excel,
-    load_sql_excel,
-    load_sql_extract,
-    to_sql_fecha_cont_series,
+    SystemFileCache,
+    load_system_file,
+    to_datetime_series,
 )
-
-_EXCEL_SUFFIXES = {".xlsx", ".xls", ".xlsm"}
 
 
 @dataclass
@@ -44,43 +41,94 @@ def _is_missing(df: pd.DataFrame, required: Iterable[str]) -> list[str]:
     return missing
 
 
-def _load_preview(path: Path, source: str, *, nrows: int = 5) -> pd.DataFrame:
-    suffix = path.suffix.lower()
-    if source == "sql":
-        if suffix in _EXCEL_SUFFIXES:
-            return load_sql_excel(path, nrows=nrows)
-        return load_sql_extract(path, nrows=nrows)
-    if suffix in _EXCEL_SUFFIXES:
-        return load_famafa_excel(path, nrows=nrows)
-    return load_famafa_csv(path, nrows=nrows)
-
-
-def _read_period_sample(
-    sql_path: Path,
+def _load_preview(
+    path: Path,
+    source: str,
     *,
-    nrows: int = 2000,
-) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
-    suffix = sql_path.suffix.lower()
-    if suffix in _EXCEL_SUFFIXES:
-        sample = load_sql_excel(sql_path, nrows=nrows)
-    else:
-        sample = load_sql_extract(sql_path, nrows=nrows)
-    if sample.empty:
+    nrows: int = 5,
+    cache: SystemFileCache | None = None,
+) -> pd.DataFrame:
+    return load_system_file(path, source, nrows=nrows, cache=cache)  # type: ignore[arg-type]
+
+
+def _ledger_date_span(ledger_path: Path, account: str) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+    try:
+        df = parse_ledger(ledger_path, account)
+    except Exception:
         return None, None
-    col = None
-    for cand in ("Fecha_Cont", "Fecha Cont", "fecha_cont"):
-        for c in sample.columns:
-            if _norm(c) == _norm(cand):
-                col = c
-                break
-        if col:
-            break
-    if col is None:
+    if df.empty or "Fecha" not in df.columns:
         return None, None
-    dt = to_sql_fecha_cont_series(sample[col]).dropna()
+    dt = pd.to_datetime(df["Fecha"], errors="coerce", dayfirst=True).dropna()
     if dt.empty:
         return None, None
-    return dt.min(), dt.max()
+    norm = dt.dt.normalize()
+    return norm.min(), norm.max()
+
+
+def _system_date_span(system_path: Path) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+    try:
+        df = load_system_file(system_path, "famafa")
+    except Exception:
+        return None, None
+    if df.empty:
+        return None, None
+    date_col = None
+    for cand in ("Fecha Emision", "Fecha Comprobante", "Fecha Emisión"):
+        for c in df.columns:
+            if _norm(c) == _norm(cand):
+                date_col = c
+                break
+        if date_col:
+            break
+    if date_col is None:
+        return None, None
+    dt = to_datetime_series(df[date_col]).dropna()
+    if dt.empty:
+        return None, None
+    norm = dt.dt.normalize()
+    return norm.min(), norm.max()
+
+
+def validate_ledger_date_coverage(
+    account: str,
+    ledger_path: Path,
+    *,
+    fecha_desde: str | None = None,
+    fecha_hasta: str | None = None,
+    system_path: Path | None = None,
+) -> list[str]:
+    warnings: list[str] = []
+    leg_min, leg_max = _ledger_date_span(ledger_path, account)
+    if leg_min is None or leg_max is None:
+        return warnings
+
+    if account == "1279" and fecha_desde and fecha_hasta:
+        try:
+            fd = pd.Timestamp(fecha_desde).normalize()
+            fh = pd.Timestamp(fecha_hasta).normalize()
+            if leg_min < fd or leg_max > fh:
+                warnings.append(
+                    f"{account}: el mayor abarca {leg_min.date()}..{leg_max.date()}, "
+                    f"mas amplio que el rango elegido {fd.date()}..{fh.date()}. "
+                    f"Las filas fuera del rango quedaran como pendientes en el mayor."
+                )
+        except Exception:
+            pass
+
+    if account in ("469", "1280", "2874") and system_path and system_path.is_file():
+        sys_min, sys_max = _system_date_span(system_path)
+        if sys_min is not None and sys_max is not None:
+            if leg_max < sys_min or leg_min > sys_max:
+                warnings.append(
+                    f"{account}: las fechas del mayor ({leg_min.date()}..{leg_max.date()}) "
+                    f"no solapan FAMAFA ({sys_min.date()}..{sys_max.date()})."
+                )
+            elif leg_min < sys_min or leg_max > sys_max:
+                warnings.append(
+                    f"{account}: el mayor ({leg_min.date()}..{leg_max.date()}) "
+                    f"se extiende fuera del rango FAMAFA ({sys_min.date()}..{sys_max.date()})."
+                )
+    return warnings
 
 
 def validate_1279_dates(
@@ -120,14 +168,26 @@ def validate_1279_dates(
             except Exception:
                 pass
         try:
-            s_min, s_max = _read_period_sample(sql_path)
-            if s_min and s_max and (fh < s_min or fd > s_max):
-                report.warnings.append(
-                    f"1279: el rango {fd.date()}..{fh.date()} no solapa la muestra SQL "
-                    f"{s_min.date()}..{s_max.date()}."
-                )
+            s_min, s_max, n_days_sql = read_sql_fecha_cont_range(sql_path)
+            if s_min is not None and s_max is not None:
+                s_min = pd.Timestamp(s_min).normalize()
+                s_max = pd.Timestamp(s_max).normalize()
+                if fh < s_min or fd > s_max:
+                    report.warnings.append(
+                        f"1279: el rango {fd.date()}..{fh.date()} no solapa el SQL "
+                        f"{s_min.date()}..{s_max.date()}."
+                    )
+                elif fd < s_min or fh > s_max:
+                    requested_days = (fh - fd).days + 1
+                    report.warnings.append(
+                        f"1279: el extracto SQL abarca {s_min.date()}..{s_max.date()} "
+                        f"({n_days_sql} dia(s) con datos), mas estrecho que el rango "
+                        f"elegido {fd.date()}..{fh.date()} ({requested_days} dia(s)). "
+                        f"Ajuste Desde/Hasta o use un SQL del periodo completo; "
+                        f"de lo contrario habra pendientes extra en el mayor."
+                    )
         except Exception as exc:
-            report.warnings.append(f"1279: no se pudo revisar la muestra de fechas SQL ({exc}).")
+            report.warnings.append(f"1279: no se pudo revisar las fechas del SQL ({exc}).")
     return report
 
 
@@ -140,11 +200,29 @@ def validate_account_inputs(
     famafa_ventas: Path | None = None,
     fecha_desde: str | None = None,
     fecha_hasta: str | None = None,
+    system_cache: SystemFileCache | None = None,
 ) -> ValidationReport:
     report = ValidationReport()
     if not ledger_path.is_file():
         report.errors.append(f"{account}: no se encontro el archivo mayor: {ledger_path}")
         return report
+
+    system_path: Path | None = None
+    if account == "1279":
+        system_path = sql_csv
+    elif account in ("469", "1280"):
+        system_path = famafa_compras
+    elif account == "2874":
+        system_path = famafa_ventas
+
+    for warn in validate_ledger_date_coverage(
+        account,
+        ledger_path,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        system_path=system_path,
+    ):
+        report.warnings.append(warn)
 
     if account == "1279":
         if sql_csv is None or not sql_csv.is_file():
@@ -155,7 +233,7 @@ def validate_account_inputs(
         if date_rep.errors:
             return report
         try:
-            df = _load_preview(sql_csv, "sql")
+            df = _load_preview(sql_csv, "sql", cache=system_cache)
         except Exception as exc:
             report.errors.append(f"1279: no se pudo leer vista previa del SQL: {exc}")
             return report
@@ -170,7 +248,7 @@ def validate_account_inputs(
             report.errors.append(f"{account}: se requiere archivo FAMAFA Compras.")
             return report
         try:
-            df = _load_preview(famafa_compras, "famafa")
+            df = _load_preview(famafa_compras, "famafa", cache=system_cache)
         except Exception as exc:
             report.errors.append(f"{account}: no se pudo leer vista previa FAMAFA Compras: {exc}")
             return report
@@ -186,7 +264,7 @@ def validate_account_inputs(
             report.errors.append("2874: se requiere archivo FAMAFA Ventas.")
             return report
         try:
-            df = _load_preview(famafa_ventas, "famafa")
+            df = _load_preview(famafa_ventas, "famafa", cache=system_cache)
         except Exception as exc:
             report.errors.append(f"2874: no se pudo leer vista previa FAMAFA Ventas: {exc}")
             return report

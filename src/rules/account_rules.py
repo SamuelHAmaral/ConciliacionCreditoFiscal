@@ -95,6 +95,27 @@ def _require_fecha_column(df: pd.DataFrame) -> str:
     return c
 
 
+def filter_ledger_account_1279(
+    df: pd.DataFrame,
+    *,
+    fecha_desde: pd.Timestamp | None = None,
+    fecha_hasta: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Account 1279: restrict mayor rows to the same calendar window as SQL."""
+    if "Fecha" not in df.columns:
+        raise KeyError("Ledger missing 'Fecha' column")
+    out = df.copy()
+    dates = pd.to_datetime(out["Fecha"], errors="coerce").dt.normalize()
+    n0 = len(out)
+    if fecha_desde is not None:
+        out = out[dates >= pd.Timestamp(fecha_desde).normalize()]
+        dates = dates.loc[out.index]
+    if fecha_hasta is not None:
+        out = out[dates <= pd.Timestamp(fecha_hasta).normalize()]
+    logger.info("1279 ledger date filter: %s -> %s rows", n0, len(out))
+    return out.reset_index(drop=True)
+
+
 def filter_sql_account_1279(
     df: pd.DataFrame,
     *,

@@ -10,10 +10,32 @@ from rules.account_rules import (
     filter_famafa_1280,
     filter_famafa_2874,
     filter_famafa_469,
+    filter_ledger_account_1279,
     filter_sql_account_1279,
 )
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def test_filter_ledger_1279_date_window():
+    ledger = pd.DataFrame(
+        {
+            "Fecha": [
+                pd.Timestamp("2026-03-31"),
+                pd.Timestamp("2026-04-01"),
+                pd.Timestamp("2026-04-30"),
+                pd.Timestamp("2026-05-01"),
+            ],
+            "Debito": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    out = filter_ledger_account_1279(
+        ledger,
+        fecha_desde=pd.Timestamp("2026-04-01"),
+        fecha_hasta=pd.Timestamp("2026-04-30"),
+    )
+    assert len(out) == 2
+    assert out["Debito"].tolist() == [2.0, 3.0]
 
 
 def test_filter_sql_1279_date_window():

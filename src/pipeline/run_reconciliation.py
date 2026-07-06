@@ -11,15 +11,16 @@ from typing import Callable
 import pandas as pd
 
 from ingestion.ledger_parser import parse_ledger
-from ingestion.system_imports import load_system_file
+from ingestion.system_imports import SystemFileCache, load_system_file
 from ingestion.validate_inputs import validate_account_inputs
-from reconcile.matcher import match_exact_one_to_one
+from reconcile.matcher import match_amount_only_one_to_one, match_exact_one_to_one
 from reporting.cuadre_writer import write_cuadre_workbook
 from rules.account_rules import (
     add_ledger_match_amount,
     filter_famafa_1280,
     filter_famafa_2874,
     filter_famafa_469,
+    filter_ledger_account_1279,
     filter_sql_account_1279,
 )
 from pipeline.errors import ErrorCode, ReconciliationError, audit_error_fields
@@ -91,8 +92,10 @@ def run_account(
     fecha_desde: str | None = None,
     fecha_hasta: str | None = None,
     amount_tolerance_1279: float = 0.0,
+    match_469_amount_only: bool = False,
     output: Path | None = None,
     audit: AuditTrail | None = None,
+    system_cache: SystemFileCache | None = None,
 ) -> Path:
     account = account.strip()
     ledger_path = ledger_path.resolve()
@@ -114,6 +117,7 @@ def run_account(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         amount_tolerance_1279=amount_tolerance_1279,
+        match_469_amount_only=match_469_amount_only,
     )
     logger.info("[%s] Inicio de conciliacion", account)
 
@@ -150,11 +154,31 @@ def run_account(
             if amount_tolerance_1279 < 0:
                 raise ValueError("amount_tolerance_1279 debe ser >= 0")
             side = "Debito"
-            logger.info("[%s] Etapa: cargar_sql ruta=%s", account, sql_csv)
-            sql_df = load_system_file(sql_csv, "sql")
-            n_sql_raw = len(sql_df)
             fd = pd.Timestamp(fecha_desde) if fecha_desde else None
             fh = pd.Timestamp(fecha_hasta) if fecha_hasta else None
+            n_leg_before = len(ledger_raw)
+            ledger_raw = filter_ledger_account_1279(
+                ledger_raw,
+                fecha_desde=fd,
+                fecha_hasta=fh,
+            )
+            _audit(
+                "ledger_date_filtered",
+                "ok",
+                rows_before=n_leg_before,
+                rows_after=len(ledger_raw),
+                fecha_desde=str(fd.date()) if fd is not None else None,
+                fecha_hasta=str(fh.date()) if fh is not None else None,
+            )
+            logger.info(
+                "[%s] Mayor filtrado por fecha: %s -> %s filas",
+                account,
+                n_leg_before,
+                len(ledger_raw),
+            )
+            logger.info("[%s] Etapa: cargar_sql ruta=%s", account, sql_csv)
+            sql_df = load_system_file(sql_csv, "sql", cache=system_cache)
+            n_sql_raw = len(sql_df)
             logger.info("[%s] Etapa: filtrar_sql fecha_desde=%s fecha_hasta=%s", account, fd, fh)
             system_df = filter_sql_account_1279(sql_df, fecha_desde=fd, fecha_hasta=fh)
             _audit(
@@ -176,7 +200,7 @@ def run_account(
                 raise ValueError("La cuenta 469 requiere famafa_compras")
             side = "Debito"
             logger.info("[%s] Etapa: cargar_famafa_compras ruta=%s", account, famafa_compras)
-            raw = load_system_file(famafa_compras, "famafa")
+            raw = load_system_file(famafa_compras, "famafa", cache=system_cache)
             n_raw = len(raw)
             system_df = filter_famafa_469(raw)
             _audit(
@@ -198,7 +222,7 @@ def run_account(
                 raise ValueError("La cuenta 1280 requiere famafa_compras")
             side = "Debito"
             logger.info("[%s] Etapa: cargar_famafa_compras ruta=%s", account, famafa_compras)
-            raw = load_system_file(famafa_compras, "famafa")
+            raw = load_system_file(famafa_compras, "famafa", cache=system_cache)
             n_raw = len(raw)
             system_df = filter_famafa_1280(raw)
             _audit(
@@ -220,7 +244,7 @@ def run_account(
                 raise ValueError("La cuenta 2874 requiere famafa_ventas")
             side = "Credito"
             logger.info("[%s] Etapa: cargar_famafa_ventas ruta=%s", account, famafa_ventas)
-            raw = load_system_file(famafa_ventas, "famafa")
+            raw = load_system_file(famafa_ventas, "famafa", cache=system_cache)
             n_raw = len(raw)
             system_df = filter_famafa_2874(raw)
             _audit(
@@ -258,16 +282,26 @@ def run_account(
         logger.info("[%s] Filas mayor con monto %s: %s", account, side, n_leg_match)
 
         amount_tolerance = amount_tolerance_1279 if account == "1279" else 0.0
+        use_amount_only = account == "469" and match_469_amount_only
+        match_mode = "amount_only" if use_amount_only else "amount_and_date"
         logger.info(
-            "[%s] Etapa: conciliar_1_a_1 tolerancia_monto=%s",
+            "[%s] Etapa: conciliar_1_a_1 modo=%s tolerancia_monto=%s",
             account,
+            match_mode,
             amount_tolerance,
         )
-        matched, u_leg, u_sys = match_exact_one_to_one(
-            ledger_m,
-            system_df,
-            amount_tolerance=amount_tolerance,
-        )
+        if use_amount_only:
+            matched, u_leg, u_sys = match_amount_only_one_to_one(
+                ledger_m,
+                system_df,
+                amount_tolerance=amount_tolerance,
+            )
+        else:
+            matched, u_leg, u_sys = match_exact_one_to_one(
+                ledger_m,
+                system_df,
+                amount_tolerance=amount_tolerance,
+            )
         n_m, n_ul, n_us = len(matched), len(u_leg), len(u_sys)
         _audit(
             "match_complete",
@@ -276,6 +310,7 @@ def run_account(
             unmatched_ledger_rows=n_ul,
             unmatched_system_rows=n_us,
             amount_tolerance=amount_tolerance,
+            match_mode=match_mode,
         )
         logger.info(
             "[%s] Conciliacion: conciliadas=%s pendientes_mayor=%s pendientes_sistema=%s",

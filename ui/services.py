@@ -66,6 +66,7 @@ class RunConfig:
     fecha_desde: str | None = None
     fecha_hasta: str | None = None
     amount_tolerance_1279: float = 0.0
+    match_469_amount_only: bool = False
 
 
 @dataclass
@@ -108,7 +109,7 @@ def validate_run_config(
     include_precheck: bool = True,
 ) -> RunValidationResult:
     from ui.i18n import account_label, t
-    from ingestion.validate_inputs import validate_account_inputs, validate_1279_dates
+    from ingestion.validate_inputs import validate_account_inputs
 
     result = RunValidationResult()
     if not cfg.jobs:
@@ -130,16 +131,6 @@ def validate_run_config(
             result.global_errors.append(t("val_fecha_desde", lang))
         if not (cfg.fecha_hasta and str(cfg.fecha_hasta).strip()):
             result.global_errors.append(t("val_fecha_hasta", lang))
-        if cfg.fecha_desde and cfg.fecha_hasta:
-            drep = validate_1279_dates(
-                cfg.fecha_desde,
-                cfg.fecha_hasta,
-                sql_path=cfg.sql_csv if include_precheck else None,
-            )
-            for e in drep.errors:
-                result.global_errors.append(t("val_date_invalid", lang, detail=e))
-            for w in drep.warnings:
-                result.warnings.append(t("val_date_warn", lang, detail=w))
     if any(j.account in ("469", "1280") for j in cfg.jobs):
         for j in cfg.jobs:
             if j.account not in ("469", "1280"):
@@ -154,6 +145,7 @@ def validate_run_config(
             result.global_errors.append(t("val_fv_required", lang))
 
     if include_precheck and not result.has_errors:
+        precheck_cache: dict = {}
         for job in cfg.jobs:
             rep = validate_account_inputs(
                 job.account,
@@ -163,6 +155,7 @@ def validate_run_config(
                 famafa_ventas=cfg.famafa_ventas,
                 fecha_desde=cfg.fecha_desde,
                 fecha_hasta=cfg.fecha_hasta,
+                system_cache=precheck_cache,
             )
             for e in rep.errors:
                 result.account_errors.setdefault(job.account, []).append(
@@ -219,6 +212,7 @@ def run_batch(
     )
 
     results: list[AccountRunResult] = []
+    system_cache: dict = {}
     try:
         for job in cfg.jobs:
             if not skip_input_validation:
@@ -230,6 +224,7 @@ def run_batch(
                     famafa_ventas=cfg.famafa_ventas,
                     fecha_desde=cfg.fecha_desde,
                     fecha_hasta=cfg.fecha_hasta,
+                    system_cache=system_cache,
                 )
                 if rep.errors:
                     from pipeline.errors import ErrorCode, ReconciliationError
@@ -247,8 +242,10 @@ def run_batch(
                 "fecha_desde": cfg.fecha_desde,
                 "fecha_hasta": cfg.fecha_hasta,
                 "amount_tolerance_1279": cfg.amount_tolerance_1279,
+                "match_469_amount_only": cfg.match_469_amount_only,
                 "output": out_xlsx,
                 "audit": audit,
+                "system_cache": system_cache,
             }
             try:
                 path = run_account(job.account, job.ledger_path, **kw)
@@ -303,6 +300,7 @@ def run_batch(
                 "fecha_desde": cfg.fecha_desde,
                 "fecha_hasta": cfg.fecha_hasta,
                 "amount_tolerance_1279": cfg.amount_tolerance_1279,
+                "match_469_amount_only": cfg.match_469_amount_only,
             },
         )
         write_run_manifest(salida / "logs" / f"run_manifest_{run_id}.json", manifest)

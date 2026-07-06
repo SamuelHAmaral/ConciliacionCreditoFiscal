@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,14 @@ def _write_result(path: Path, payload: dict) -> None:
 def run_from_request(request_path: Path) -> int:
     """Execute batch job described by request JSON; return process exit code."""
     request_path = request_path.resolve()
-    data = json.loads(request_path.read_text(encoding="utf-8"))
+    if not request_path.is_file():
+        print(f"ERROR: batch request file not found: {request_path}", file=sys.stderr)
+        return 1
+    try:
+        data = json.loads(request_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"ERROR: invalid batch request JSON in {request_path}: {exc}", file=sys.stderr)
+        return 1
 
     result_path = Path(data["result_path"])
     run_id = str(data["run_id"])
@@ -74,29 +82,34 @@ def run_from_request(request_path: Path) -> int:
         )
         qa_rows: list[dict] = []
         qa_report_path: str | None = None
-        if data.get("uat_verify"):
-            _write_result(
-                result_path,
-                {
-                    "ok": False,
-                    "phase": "uat",
-                    "run_id": run_id,
-                    "log_path": str(log_path),
-                    "audit_path": str(audit_path),
-                },
-            )
-            outputs = {r.account: r.output for r in results if r.ok and r.output}
-            models_root = Path(data["models_root"]) if data.get("models_root") else None
-            if models_root and models_root.is_dir():
-                variances = compare_with_golden(outputs, models_root=models_root)
-                qa_rows = [_uat_row_to_dict(row) for row in variances]
-                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                qa_report_path = str(
-                    write_variance_csv(
-                        variances,
-                        cfg.salida / "logs" / f"qa_variance_{stamp}.csv",
-                    )
+        outputs = {r.account: r.output for r in results if r.ok and r.output}
+        metrics = {r.account: r.metrics for r in results if r.ok}
+        models_root = Path(data["models_root"]) if data.get("models_root") else None
+        if models_root and models_root.is_dir() and outputs:
+            if data.get("uat_verify"):
+                _write_result(
+                    result_path,
+                    {
+                        "ok": False,
+                        "phase": "uat",
+                        "run_id": run_id,
+                        "log_path": str(log_path),
+                        "audit_path": str(audit_path),
+                    },
                 )
+            variances = compare_with_golden(
+                outputs,
+                models_root=models_root,
+                output_metrics=metrics,
+            )
+            qa_rows = [_uat_row_to_dict(row) for row in variances]
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            qa_report_path = str(
+                write_variance_csv(
+                    variances,
+                    cfg.salida / "logs" / f"qa_variance_{stamp}.csv",
+                )
+            )
 
         _write_result(
             result_path,
