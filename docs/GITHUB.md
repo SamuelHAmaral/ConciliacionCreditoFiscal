@@ -1,75 +1,41 @@
-# GitHub: publicar y descargar
+# GitHub: codigo del bot Skipper
 
-El repositorio puede usarse de dos maneras: descarga del ejecutable (Releases) o clonado para desarrollo.
+Como funciona: [`COMO_FUNCIONA.md`](COMO_FUNCIONA.md). Skipper: [`SKIPPER.md`](SKIPPER.md).  
+Cambiar cuentas: [`MANTENIMIENTO.md`](MANTENIMIENTO.md).
 
-## Usuarios finales (sin Python): ZIP de Releases
+Este repositorio es el codigo que corre en Kowalski (Linux o Windows). **No** publica un `.exe` ni un ZIP de escritorio.
 
-**No use** el boton verde **Code ? Download ZIP**: eso es codigo fuente, no el `.exe`.
+## Clonar en el servidor de corrida
 
-1. Abra **[Releases](https://github.com/SamuelHAmaral/ConciliacionCreditoFiscal/releases)** del repositorio.
-2. En la ultima version (**Latest**), descargue **`ConciliacionCreditoFiscal-Windows-x64-*.zip`** (asset del Release).
-4. Extraiga el ZIP en una carpeta local (por ejemplo `C:\Herramientas\ConciliacionCreditoFiscal`).
-5. Lea **`LEEME.txt`** en la raiz del ZIP extraido.
-6. Ejecute **`ConciliacionCreditoFiscal\ConciliacionCreditoFiscal.exe`**.
+Linux:
 
-No suba solo el `.exe` a otro lado; la carpeta `_internal` debe quedar al lado del ejecutable.
-
-### Que no va en git
-
-La aplicacion empaquetada es **grande** (~100 MB o mas). Se genera en CI y se adjunta a Releases, no se versiona en el historial de git.
-
-Rutas ignoradas: `dist/`, `build/`, `.venv-build/`, archivos `*.zip`.
-
----
-
-## Desarrolladores: clonar y ejecutar desde codigo
-
-```powershell
-git clone <url-de-su-repositorio>.git
-cd reconciliation_engine
-py -3 -m pip install -r requirements.txt
-.\ConciliacionGUI.bat
+```bash
+git clone <url-del-repositorio>.git
+cd ConciliacionCreditoFiscal
+python3 -m pip install -r requirements.txt
+export PYTHONPATH="src:."
+python3 -m pytest tests/ -q
+chmod +x run_cabo.sh
 ```
 
-Pruebas automaticas:
+Windows:
 
 ```powershell
-$env:PYTHONPATH = "src"
+git clone <url-del-repositorio>.git
+cd ConciliacionCreditoFiscal
+py -3 -m pip install -r requirements.txt
+$env:PYTHONPATH = "src;."
 py -3 -m pytest tests/ -q
 ```
 
----
+Apunte Kowalski a `run_cabo.sh` (Linux) o `run_cabo.bat` (Windows). Variables y campos: [`docs/SKIPPER.md`](SKIPPER.md). En Linux el correo espera `CONCILIACION_SMTP_HOST` (Office 365); hasta entonces los CUADRE quedan en `salidas/`.
 
-## Mantenedores: crear una version (release)
+## Que no va en git
 
-### Opcion A - Etiqueta git (recomendado)
+- `config/cabo_config.ini` (secretos / URL local)
+- `salidas/`, `dist/`, `build/`, `.venv/`
+- Tokens Skipper (solo variables de entorno de la cuenta de servicio)
 
-```powershell
-cd reconciliation_engine
-git tag v1.0.0
-git push origin v1.0.0
-```
+## Estructura
 
-El flujo **Release** en GitHub Actions compila el `.exe`, arma el ZIP y lo adjunta al Release de esa etiqueta.
-
-### Opcion B - Compilacion manual en su PC
-
-```powershell
-cd reconciliation_engine
-powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1
-powershell -ExecutionPolicy Bypass -File scripts\package_release.ps1 -Version 1.0.0
-```
-
-Suba `dist\ConciliacionCreditoFiscal-Windows-x64-1.0.0.zip` a un Release nuevo en GitHub.
-
-### Opcion C - Probar CI sin etiqueta
-
-GitHub -> **Actions** -> **Release** -> **Ejecutar flujo de trabajo**. Descargue el ZIP en **Artifacts**.
-
----
-
-## Estructura del repositorio en GitHub
-
-Publique **`reconciliation_engine`** como raiz del repositorio (esta carpeta contiene `desktop/`, `src/`, `scripts/`, `README.md`).
-
-Si la raiz de git es un monorepo mas amplio, ajuste `working-directory` en el workflow o use un repositorio dedicado solo para esta aplicacion.
+Publique este proyecto como raiz del repositorio (`src/`, `scripts/`, `run_cabo.sh`, `run_cabo.bat`, `README.md`).

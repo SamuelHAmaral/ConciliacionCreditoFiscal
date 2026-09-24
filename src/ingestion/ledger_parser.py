@@ -92,6 +92,18 @@ def _parse_cuenta_from_header(lines: list[str]) -> str | None:
     return None
 
 
+def peek_ledger_account(filepath: str | Path) -> str | None:
+    """Return the CUENTA header from a mayor txt, or None if it is not a ledger."""
+    path = Path(filepath)
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="latin-1", errors="replace")
+    except OSError:
+        return None
+    return _parse_cuenta_from_header(text.splitlines())
+
+
 def _should_skip_line(line: str) -> bool:
     if not line.strip():
         return True

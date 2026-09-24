@@ -1,21 +1,25 @@
 # Criterios de aceptacion y metricas de calidad (UAT)
 
+Como funciona el bot (emparejado, Skipper, 469 solo importe): [`COMO_FUNCIONA.md`](COMO_FUNCIONA.md).  
+Cambiar cuentas: [`MANTENIMIENTO.md`](MANTENIMIENTO.md).
+
 Este documento define las puertas de calidad para el Motor Automatizado de Conciliacion Financiera.
 
 ## Alcance funcional
 
 - Cuentas soportadas: **1279** (SQL), **469** y **1280** (FAMAFA Compras), **2874** (FAMAFA Ventas).
 - **Fuera de alcance:** cuenta de debito fiscal atendida por macro del banco.
-- Salida: un archivo Excel por cuenta en formato **CUADRE** (hoja con nombre de cuenta, columnas lado a lado, columna **CRUCE** con formula), con banner de resumen y encabezados congelados.
+- Salida: un archivo Excel por cuenta en formato **CUADRE** (hoja con nombre de cuenta, columnas lado a lado, columna **CRUCE** con formula), con banner de resumen y encabezados congelados. En produccion Skipper esos Excel se envian por correo al usuario de la ejecucion (`data.user.email`).
 - Cuenta **1279:** hoja adicional **Hoja1** con pendientes solo del sistema cuando existan.
 
 ## Reglas de conciliacion (estrictas)
 
 1. **Monto**: igualdad exacta entre `_match_amount` del mayor y del sistema (tras normalizacion de decimales).
-2. **Fecha**: igualdad exacta en dia calendario entre `_match_date` del mayor (`Fecha` del TXT parseado) y del sistema:
+2. **Fecha** (1279, 1280, 2874): igualdad exacta en dia calendario entre `_match_date` del mayor (`Fecha` del TXT parseado) y del sistema:
    - SQL 1279: `Fecha_Cont` (incluye enteros compactos tipo `2942026` = 29/04/2026).
    - FAMAFA: `Fecha Emision` / `Fecha Comprobante` / `Fecha` (detectada automaticamente).
-3. **Uno a uno**: ninguna fila del mayor ni del sistema puede participar en mas de un emparejamiento.
+3. **469**: solo monto, 1 a 1 (`match_mode: amount_only` en `accounts.yml`). Coincide con `CRUCE 469 - PARÁMETROS.docx`: ordenar por importe y restar debito − IVA 10. Fecha de emision vs fecha de asiento se muestran en el CUADRE y no son llave de cruce.
+4. **Uno a uno**: ninguna fila del mayor ni del sistema puede participar en mas de un emparejamiento.
 
 ## Formato CUADRE (salida)
 
@@ -47,7 +51,7 @@ Adicionalmente:
 
 ## Diferencias esperadas vs proceso manual
 
-- El manual empareja solo por **monto** (orden menor a mayor). El motor exige **monto + fecha**, lo que puede reducir falsos positivos cuando hay montos duplicados en fechas distintas.
+- **469** sigue el proceso manual: solo **monto** (orden menor a mayor). **1279 / 1280 / 2874** exigen **monto + fecha**.
 - El mayor puede contener mas dias que el extracto SQL/FAMAFA del periodo; las filas extra quedan en pendientes mayor.
 - Los conteos de filas vs un CUADRE manual del mismo mes pueden diferir; use `scripts/uat_compare_cuadre.py` para comparar metricas.
 

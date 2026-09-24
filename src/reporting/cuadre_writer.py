@@ -37,6 +37,8 @@ _LEDGER_FIELDS: list[tuple[str, str]] = [
     ("Credito", _HDR_CREDITOS),
 ]
 
+# MANTENIMIENTO — columnas del CUADRE: 1279 = SQL; el resto = FAMAFA.
+# Si una cuenta nueva no encaja, agregue un spec. Ver docs/MANTENIMIENTO.md.
 _SYSTEM_1279: list[tuple[str, tuple[str, ...]]] = [
     ("Nro. de Documento", ("Nro. de Documento", "Nro de Documento", "Nro Documento")),
     ("Nombre", ("Nombre",)),

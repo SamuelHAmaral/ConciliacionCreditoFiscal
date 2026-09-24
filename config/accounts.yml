@@ -1,11 +1,38 @@
-# Metadatos de cuentas y reglas de conciliacion (configuracion centralizada).
+# CAMBIAR CUENTAS AQUI
+# Recetas (solo YAML / renombrar / agregar): docs/MANTENIMIENTO.md
+# Como funciona el cruce: docs/COMO_FUNCIONA.md
+#
+# La clave ("469", "1279", …) es el numero de cuenta. Debe coincidir con
+# mayorpc NNN.txt y con CUENTA: NNN en el TXT.
+#
+# Campos:
+#   profile_name     etiqueta humana (logs / UI)
+#   system_type      sql | famafa_compras | famafa_ventas
+#                    (el pipeline Python sigue ruteando por numero; ver MANTENIMIENTO)
+#   ledger_side      Debito | Credito  — columna del mayor que entra al cruce
+#   match_column     columna de IVA del sistema: "IVA ML" (SQL) o "IVA 10" (FAMAFA)
+#   match_mode       amount_and_date (defecto) | amount_only
+#                    alias: solo_importe, importe
+#   required_columns.sql / .famafa
+#                    columnas que deben existir o el bot falla antes de cruzar
+#   filters.tipo_comprobante   entero FAMAFA (109 compras, 110 ventas, …)
+#   filters.timbrado_rule      exclude | include
+#   filters.timbrado_value     timbrado especial (hoy 12345678 en 469 y 1280)
+#
+# Si cambia YAML, copie el mismo valor a _DEFAULT_ACCOUNTS en
+# src/config/account_config.py (respaldo si falta este archivo).
+# No hardcodee tipo/timbrado otra vez en account_rules.py: ya se leen de aqui.
 
 accounts:
   "469":
+    # IVA compras 10%. Comparte FAMAFA COMPRAS.xlsx con 1280 (timbrado inverso).
     profile_name: "IVA compras"
     system_type: "famafa_compras"
     ledger_side: "Debito"
     match_column: "IVA 10"
+    # CRUCE 469: ordenar por importe y restar debito − IVA 10.
+    # Fecha de factura ≠ fecha de asiento: las fechas son solo para mostrar.
+    match_mode: "amount_only"
     required_columns:
       famafa:
         - "Tipo Comprobante"
@@ -17,10 +44,12 @@ accounts:
       timbrado_value: "12345678"
 
   "1280":
+    # Retenciones exterior. Mismo libro Compras que 469; solo el timbrado especial.
     profile_name: "Retenciones exterior"
     system_type: "famafa_compras"
     ledger_side: "Debito"
     match_column: "IVA 10"
+    # Sin match_mode: usa amount_and_date (importe y misma fecha calendario).
     required_columns:
       famafa:
         - "Tipo Comprobante"
@@ -33,6 +62,7 @@ accounts:
       timbrado_value: "12345678"
 
   "1279":
+    # NC emitidas. Extracto SQL (no FAMAFA). Fechas Desde/Hasta sobre Fecha_Cont.
     profile_name: "NC emitidas"
     system_type: "sql"
     ledger_side: "Debito"
@@ -44,6 +74,7 @@ accounts:
     filters: {}
 
   "2874":
+    # NC recibidas. FAMAFA VENTAS; cruza la columna Credito del mayor.
     profile_name: "NC recibidas"
     system_type: "famafa_ventas"
     ledger_side: "Credito"

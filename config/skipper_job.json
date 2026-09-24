@@ -1,40 +1,60 @@
 {
   "name": "conciliacion-credito-fiscal",
-  "description": "Conciliacion de credito fiscal — batch CUADRE generation",
-  "command": "py -3 scripts/skipper_run.py",
-  "arguments": [
-    "--insumos",
-    "${INPUT_INSUMOS}",
-    "--salida",
-    "${OUTPUT_SALIDA}",
-    "--fecha-desde",
-    "${FECHA_DESDE}",
-    "--fecha-hasta",
-    "${FECHA_HASTA}"
-  ],
-  "optional_arguments": [
-    "--469-amount-only",
-    "--models-root",
-    "${MODELS_ROOT}",
-    "--verbose"
-  ],
-  "inputs": [
+  "description": "Conciliacion de credito fiscal — Skipper / Cabo / Kowalski",
+  "command": "run_cabo.sh",
+  "command_windows": "run_cabo.bat",
+  "runner": "scripts/cabo_runner.py",
+  "environment": {
+    "PYTHONPATH": "src:.",
+    "PYTHONPATH_WINDOWS": "src;.",
+    "EXECUTION_ID": "${EXECUTION_ID}",
+    "CABO_ATTACHMENT_DIR": "${CABO_ATTACHMENT_DIR}",
+    "SKIPPER_API_BASE_URL": "${SKIPPER_API_BASE_URL}",
+    "SKIPPER_API_TOKEN": "${SKIPPER_API_TOKEN}",
+    "CONCILIACION_SMTP_HOST": "${CONCILIACION_SMTP_HOST}",
+    "CONCILIACION_SMTP_USER": "${CONCILIACION_SMTP_USER}",
+    "CONCILIACION_SMTP_PASSWORD": "${CONCILIACION_SMTP_PASSWORD}",
+    "CONCILIACION_EMAIL_FROM": "${CONCILIACION_EMAIL_FROM}"
+  },
+  "form_fields": [
     {
-      "id": "INPUT_INSUMOS",
-      "description": "Carpeta del mes con subcarpetas Cuenta 1279/469/1280/2874"
+      "id": "fecha_desde",
+      "description": "1279 Desde (YYYY-MM-DD). Vacio: inferir desde Fecha_Cont del SQL."
+    },
+    {
+      "id": "fecha_hasta",
+      "description": "1279 Hasta (YYYY-MM-DD). Vacio: inferir desde Fecha_Cont del SQL."
+    },
+    {
+      "id": "solo_ultimo_dia_sql",
+      "description": "Checkbox. Si true, Desde y Hasta = ultimo dia Fecha_Cont del SQL."
+    },
+    {
+      "id": "match_469_amount_only",
+      "description": "Opcional / legado. 469 ya cruza solo por importe (CRUCE 469). Encendido o apagado no cambia el criterio."
+    },
+    {
+      "id": "accounts",
+      "description": "MANTENIMIENTO — si cambia el numero de cuenta, actualice este default y config/accounts.yml (docs/MANTENIMIENTO.md). Opcional. Cuentas separadas por coma. Default 1279,469,1280,2874."
+    },
+    {
+      "id": "correo",
+      "description": "Opcional. Destinatario extra de los Excel CUADRE. El usuario que lanzo la ejecucion (user.email) siempre los recibe."
+    }
+  ],
+  "attachments": [
+    {
+      "description": "Archivos sueltos (original name: mayorpc*.txt, SQL*, FAMAFA COMPRAS*, FAMAFA VENTAS*). Skipper puede guardar un upload name distinto; el bot usa el original name."
     }
   ],
   "outputs": [
     {
-      "glob": "CUADRE_*_reconciliacion.xlsx",
+      "glob": "salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx",
       "description": "Libros CUADRE por cuenta"
     },
     {
-      "glob": "logs/**",
-      "description": "Logs, audit JSONL, qa_variance CSV"
+      "glob": "salidas/<execution_id>/logs/**",
+      "description": "Logs, audit JSONL, manifiesto"
     }
-  ],
-  "environment": {
-    "PYTHONPATH": "src;."
-  }
+  ]
 }

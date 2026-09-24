@@ -36,3 +36,39 @@ def test_discover_sets_fecha_from_sql_content(tmp_path: Path):
     d = discover_inputs(root)
     assert d.fecha_desde == "2026-04-29"
     assert d.fecha_hasta == "2026-04-30"
+
+
+def test_discover_flat_folder_and_shared_famafa_compras(tmp_path: Path):
+    root = tmp_path / "adjuntos"
+    root.mkdir()
+    (root / "mayorpc 469.txt").write_text("CUENTA: 469\n", encoding="latin-1")
+    (root / "mayorpc 1280.txt").write_text("CUENTA: 1280\n", encoding="latin-1")
+    (root / "FAMAFA COMPRAS.xlsx").write_text("x", encoding="utf-8")
+    d = discover_inputs(root)
+    assert d.ledgers["469"].name == "mayorpc 469.txt"
+    assert d.ledgers["1280"].name == "mayorpc 1280.txt"
+    assert d.famafa_compras["469"].name == "FAMAFA COMPRAS.xlsx"
+    assert d.famafa_compras["1280"].name == "FAMAFA COMPRAS.xlsx"
+
+
+def test_discover_ledger_from_cuenta_header_when_filename_is_opaque(tmp_path: Path):
+    root = tmp_path / "adjuntos"
+    root.mkdir()
+    (root / "uuid-cabo-1.txt").write_text(
+        " CUENTA:   1280  RETENCIONES DEL EXTERIOR\n",
+        encoding="latin-1",
+    )
+    d = discover_inputs(root)
+    assert "1280" in d.ledgers
+    assert d.ledgers["1280"].name == "uuid-cabo-1.txt"
+
+
+def test_discover_named_famafa_compras_not_overwritten(tmp_path: Path):
+    root = tmp_path / "adjuntos"
+    root.mkdir()
+    (root / "mayorpc 469.txt").write_text("CUENTA: 469\n", encoding="latin-1")
+    (root / "FAMAFA COMPRAS 469.xlsx").write_text("a", encoding="utf-8")
+    (root / "FAMAFA COMPRAS.xlsx").write_text("b", encoding="utf-8")
+    d = discover_inputs(root)
+    assert d.famafa_compras["469"].name == "FAMAFA COMPRAS 469.xlsx"
+    assert d.famafa_compras["1280"].name == "FAMAFA COMPRAS.xlsx"

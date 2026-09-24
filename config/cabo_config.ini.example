@@ -1,0 +1,31 @@
+; Copy to config/cabo_config.ini for local smoke tests. Do not put secrets in git.
+; Production: set SKIPPER_API_BASE_URL and SKIPPER_API_TOKEN on the Kowalski / RDP account.
+
+[api]
+base_url = http://192.168.0.61:8080
+token_env = SKIPPER_API_TOKEN
+timeout_seconds = 20
+; PUT {"status": "En Ejecución"} at start, {"status": "Finalizado"} on success.
+status_method = PUT
+
+[paths]
+; Relative paths are resolved from the project root.
+salida_root = salidas
+
+[email]
+; CUADRE files are emailed to Skipper data.user.email. Optional extra recipients:
+to =
+cc =
+from =
+; Linux: set smtp_host (Office 365 typical: smtp.office365.com port 587).
+; Windows: empty smtp_host uses Outlook. Linux never uses Outlook.
+smtp_host =
+smtp_port = 587
+smtp_user =
+smtp_password_env = CONCILIACION_SMTP_PASSWORD
+starttls = true
+; Leave empty to default: true on Windows, false on Linux.
+; use_outlook =
+enabled = true
+timeout_seconds = 30
+        

@@ -1,4 +1,10 @@
-"""End-to-end reconciliation CLI for accounts 1279, 469, 1280, 2874."""
+"""End-to-end reconciliation for accounts 1279, 469, 1280, 2874.
+
+Loads mayor + system file, applies account_rules filters, matches 1-to-1
+(amount+date, except 469 amount-only from config/accounts.yml), writes CUADRE.
+CLI: ``py -3 -m pipeline.run_reconciliation``. Production goes through
+``ui.services.run_batch`` / ``scripts/cabo_runner.py``. See docs/COMO_FUNCIONA.md.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,7 @@ from typing import Callable
 
 import pandas as pd
 
+from config.account_config import match_mode_for
 from ingestion.ledger_parser import parse_ledger
 from ingestion.system_imports import SystemFileCache, load_system_file
 from ingestion.validate_inputs import validate_account_inputs
@@ -148,6 +155,9 @@ def run_account(
         )
         logger.info("[%s] Mayor parseado: %s filas", account, n_ledger)
 
+        # MANTENIMIENTO — si cambia el numero de cuenta o se agrega una del mismo tipo,
+        # copie un bloque elif y actualice choices= abajo. Tipo/timbrado/match_mode
+        # se leen de config/accounts.yml (no hardcodearlos aqui). Ver docs/MANTENIMIENTO.md.
         if account == "1279":
             if not sql_csv:
                 raise ValueError("La cuenta 1279 requiere sql_csv")
@@ -282,7 +292,11 @@ def run_account(
         logger.info("[%s] Filas mayor con monto %s: %s", account, side, n_leg_match)
 
         amount_tolerance = amount_tolerance_1279 if account == "1279" else 0.0
-        use_amount_only = account == "469" and match_469_amount_only
+        # 469 CRUCE rules pair by amount only (invoice date != booking date).
+        # match_469_amount_only remains as an extra opt-in for other accounts if set.
+        use_amount_only = match_mode_for(account) == "amount_only" or (
+            account == "469" and match_469_amount_only
+        )
         match_mode = "amount_only" if use_amount_only else "amount_and_date"
         logger.info(
             "[%s] Etapa: conciliar_1_a_1 modo=%s tolerancia_monto=%s",
@@ -410,6 +424,10 @@ def run_account(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Multi-account financial reconciliation")
+    # MANTENIMIENTO — si cambia el numero de cuenta, actualizar tambien:
+    #   config/accounts.yml, folder_discovery.ACCOUNTS, account_config._DEFAULT_ACCOUNTS,
+    #   ui/i18n.py, account_rules.py (elif account == mas arriba), skipper_job.json,
+    #   docs/MANTENIMIENTO.md.
     p.add_argument("--account", required=True, choices=["1279", "469", "1280", "2874"])
     p.add_argument("--ledger", required=True, type=Path, help="Path to mayorpc .txt for this account")
     p.add_argument("--sql-csv", type=Path, help="SQL extract CSV (required for 1279)")

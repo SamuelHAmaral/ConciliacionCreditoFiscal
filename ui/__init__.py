@@ -1,1 +1,1 @@
-"""Streamlit UI package for the reconciliation engine."""
+"""Headless orchestration helpers for Skipper / Cabo runs."""

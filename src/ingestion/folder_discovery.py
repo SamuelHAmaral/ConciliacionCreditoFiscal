@@ -1,4 +1,9 @@
-"""Discover reconciliation inputs under the shared insumos folder layout."""
+"""Discover reconciliation inputs under a folder of mayor / SQL / FAMAFA files.
+
+Looks for mayorpc*.txt (or any .txt whose header is ``CUENTA: 1279|469|1280|2874``),
+SQL*, FAMAFA COMPRAS* (shared by 469 and 1280), FAMAFA VENTAS*. Subfolders named
+``Cuenta 469...`` still work; Skipper uploads are usually a flat dump of original names.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# MANTENIMIENTO — si cambia el numero de cuenta, actualizar tambien:
+#   config/accounts.yml, src/config/account_config.py (_DEFAULT_ACCOUNTS),
+#   ui/i18n.py, src/pipeline/run_reconciliation.py (choices= y elif account ==),
+#   src/rules/account_rules.py, config/skipper_job.json, docs/MANTENIMIENTO.md.
+# 469 y 1280 comparten FAMAFA COMPRAS (ramas elif acc in ("469", "1280") abajo).
 ACCOUNTS = ("1279", "469", "1280", "2874")
 _INSUMOS_DIR_NAME = "Automatizaci\u00f3n conciliaciones"
 
@@ -50,6 +60,7 @@ def _find_in_dir(directory: Path, pattern: str) -> list[Path]:
     return list(directory.glob(pattern))
 
 
+from ingestion.ledger_parser import peek_ledger_account
 from ingestion.sql_fecha_range import infer_fecha_range_from_sql
 
 
@@ -65,6 +76,13 @@ def discover_inputs(root: str | Path) -> DiscoveredInputs:
     for p in base.rglob("mayorpc*.txt"):
         acc = _account_from_path(p)
         if acc:
+            out.ledgers.setdefault(acc, p)
+
+    for p in base.rglob("*.txt"):
+        if p.name.lower().startswith("mayorpc"):
+            continue
+        acc = _account_from_path(p) or peek_ledger_account(p)
+        if acc in ACCOUNTS:
             out.ledgers.setdefault(acc, p)
 
     for sub in sorted(base.iterdir()):
@@ -110,11 +128,25 @@ def discover_inputs(root: str | Path) -> DiscoveredInputs:
         sql_files = list(base.rglob("SQL*.xlsx")) + list(base.rglob("SQL*.csv"))
         out.sql_1279 = _pick_newest(sql_files)
 
-    if not out.famafa_compras:
+    for acc in ("469", "1280"):
+        if acc in out.famafa_compras:
+            continue
+        named = list(base.rglob(f"FAMAFA COMPRAS*{acc}*.xlsx")) + list(
+            base.rglob(f"FAMAFA COMPRAS*{acc}*.csv")
+        )
+        picked = _pick_newest(named)
+        if picked:
+            out.famafa_compras[acc] = picked
+
+    generic_compras = [
+        p
+        for p in list(base.rglob("FAMAFA COMPRAS*.xlsx")) + list(base.rglob("FAMAFA COMPRAS*.csv"))
+        if "ventas" not in p.name.lower()
+    ]
+    shared_compras = _pick_newest(generic_compras)
+    if shared_compras is not None:
         for acc in ("469", "1280"):
-            compras = list(base.rglob(f"FAMAFA COMPRAS*{acc}*.xlsx"))
-            if compras:
-                out.famafa_compras[acc] = _pick_newest(compras)
+            out.famafa_compras.setdefault(acc, shared_compras)
 
     if out.famafa_ventas is None:
         ventas = list(base.rglob("FAMAFA VENTAS*.xlsx")) + list(base.rglob("FAMAFA VENTAS*.csv"))

@@ -22,7 +22,10 @@ venv/
 .cursor/
 *.log
 
-# Release artifacts (built in CI or scripts/package_release.ps1)
+# Local Cabo / Skipper secrets (copy from cabo_config.ini.example)
+config/cabo_config.ini
+
+# Local / generated archives
 *.zip
 
 # Old packaged name (do not commit binaries)

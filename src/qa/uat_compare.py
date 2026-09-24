@@ -8,6 +8,8 @@ from typing import Any
 
 import pandas as pd
 
+# MANTENIMIENTO — si cambia el numero de cuenta, actualice el glob del modelo
+# y docs/MANTENIMIENTO.md.
 _MODEL_GLOBS: dict[str, str] = {
     "1279": "CUADRE 1279*.xlsx",
     "469": "CUADRE 469*.xlsx",

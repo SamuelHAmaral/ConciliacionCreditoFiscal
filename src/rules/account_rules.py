@@ -1,4 +1,11 @@
-"""Account-specific filters and routing for reconciliation."""
+"""Account-specific filters and routing for reconciliation.
+
+MANTENIMIENTO — tipo_comprobante y timbrado se leen de config/accounts.yml
+via _profile_filter / timbrado_valor_for. No hardcodee esos valores otra vez
+en las funciones filter_famafa_*. Si cambia el numero de cuenta, renombre
+las funciones y las claves ("469", "1280", …) y actualice la lista en
+docs/MANTENIMIENTO.md, folder_discovery.ACCOUNTS e i18n.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +42,8 @@ def _require_col(df: pd.DataFrame, *candidates: str) -> str:
 
 
 def _profile_filter(account: str, key: str, default: Any) -> Any:
+    # MANTENIMIENTO: default solo si YAML no define la clave. El valor real
+    # (tipo 109/110, exclude/include) vive en config/accounts.yml.
     prof = account_profile(account)
     filters = prof.get("filters") if isinstance(prof.get("filters"), dict) else {}
     return filters.get(key, default)
@@ -171,7 +180,7 @@ def _attach_famafa_match_date(out: pd.DataFrame) -> pd.DataFrame:
 
 
 def filter_famafa_469(df: pd.DataFrame) -> pd.DataFrame:
-    """469: Tipo 109, exclude configured timbrado (default 12345678), exclude IVA 10 == 0."""
+    """469: Tipo y timbrado salen de YAML (defecto: 109, exclude 12345678); IVA 10 != 0."""
     out, tcol, tim, iva = _famafa_base(df, "469")
     tipo = int(_profile_filter("469", "tipo_comprobante", 109))
     tim_rule = str(_profile_filter("469", "timbrado_rule", "exclude")).strip().lower()
@@ -193,7 +202,7 @@ def filter_famafa_469(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def filter_famafa_1280(df: pd.DataFrame) -> pd.DataFrame:
-    """1280: Tipo 109, only configured timbrado (default 12345678), exclude IVA 10 == 0."""
+    """1280: Tipo y timbrado salen de YAML (defecto: 109, include 12345678); IVA 10 != 0."""
     out, tcol, tim, iva = _famafa_base(df, "1280")
     if not tim:
         raise KeyError("1280 requires Nro. Timbrado column")
@@ -216,7 +225,7 @@ def filter_famafa_1280(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def filter_famafa_2874(df: pd.DataFrame) -> pd.DataFrame:
-    """2874: Tipo 110, exclude IVA 10 == 0 (Ventas)."""
+    """2874: Tipo sale de YAML (defecto: 110); IVA 10 != 0 (Ventas)."""
     out, tcol, _tim, iva = _famafa_base(df, "2874")
     tipo = int(_profile_filter("2874", "tipo_comprobante", 110))
     n0 = len(out)

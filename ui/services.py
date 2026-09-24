@@ -1,4 +1,4 @@
-"""Validation, logging cleanup, and orchestration for desktop / optional web UI."""
+"""Validation, logging cleanup, and orchestration for headless Skipper / CLI runs."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def project_root() -> Path:
 def prune_reconciliation_file_handlers(logs_dir: Path) -> None:
     """
     Remove root FileHandlers pointing under logs_dir that look like conciliacion_*.log
-    to avoid unbounded handler growth on repeated UI runs (Streamlit/Tk reruns).
+    to avoid unbounded handler growth on repeated batch runs.
     """
     try:
         logs_abs = str(logs_dir.resolve()).lower()
@@ -173,7 +173,7 @@ def run_batch(
     *,
     verbose: bool = False,
     console_log: bool = False,
-    ui_source: str = "desktop",
+    ui_source: str = "skipper",
     skip_input_validation: bool = False,
     run_id: str | None = None,
 ) -> tuple[str, Path, Path, list[AccountRunResult]]:

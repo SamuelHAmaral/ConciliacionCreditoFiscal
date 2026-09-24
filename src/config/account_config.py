@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_CACHE: dict[str, Any] | None = None
 
+# MANTENIMIENTO — si cambia el numero de cuenta, actualizar tambien:
+#   config/accounts.yml (fuente principal), src/ingestion/folder_discovery.py (ACCOUNTS),
+#   ui/i18n.py, run_reconciliation.py, account_rules.py, skipper_job.json,
+#   docs/MANTENIMIENTO.md.
+# Este dict es el respaldo si falta YAML o PyYAML: mantengalo igual que accounts.yml.
 _DEFAULT_ACCOUNTS: dict[str, dict[str, Any]] = {
     "1279": {
         "profile_name": "NC emitidas",
@@ -27,6 +32,7 @@ _DEFAULT_ACCOUNTS: dict[str, dict[str, Any]] = {
         "system_type": "famafa_compras",
         "ledger_side": "Debito",
         "match_column": "IVA 10",
+        "match_mode": "amount_only",
         "required_columns": {
             "famafa": ["Tipo Comprobante", "IVA 10", "Fecha Emision"],
         },
@@ -131,6 +137,15 @@ def required_columns_for(account: str, source: str) -> list[str]:
     if not isinstance(cols, list):
         return []
     return [str(c) for c in cols]
+
+
+def match_mode_for(account: str, *, default: str = "amount_and_date") -> str:
+    """Return ``amount_only`` or ``amount_and_date`` for an account profile."""
+    prof = account_profile(account)
+    mode = str(prof.get("match_mode", default) or default).strip().lower().replace("-", "_")
+    if mode in ("amount_only", "solo_importe", "importe"):
+        return "amount_only"
+    return "amount_and_date"
 
 
 def timbrado_valor_for(account: str, *, default: str = "12345678") -> str:
