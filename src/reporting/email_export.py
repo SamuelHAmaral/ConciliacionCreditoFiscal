@@ -35,6 +35,9 @@ class EmailSettings:
     smtp_starttls: bool = True
     use_outlook: bool = False
     timeout: float = 30.0
+    o365_client_id: str = ""
+    o365_client_secret: str = ""
+    o365_tenant_id: str = ""
 
 
 def default_use_outlook(platform: str | None = None) -> bool:
@@ -42,8 +45,12 @@ def default_use_outlook(platform: str | None = None) -> bool:
     return (platform or sys.platform) == "win32"
 
 
+def has_o365_transport(settings: EmailSettings) -> bool:
+    return bool(settings.o365_client_id and settings.o365_client_secret and settings.o365_tenant_id)
+
+
 def has_email_transport(settings: EmailSettings) -> bool:
-    return bool(settings.smtp_host) or bool(settings.use_outlook)
+    return has_o365_transport(settings) or bool(settings.smtp_host) or bool(settings.use_outlook)
 
 
 @dataclass
@@ -161,7 +168,10 @@ def load_email_settings(
             parse_email_list(env.get("CONCILIACION_EMAIL_CC") or (section.get("cc") if section else ""))
         ),
         sender=str(
-            env.get("CONCILIACION_EMAIL_FROM") or (section.get("from") if section else "") or ""
+            env.get("CONCILIACION_EMAIL_FROM")
+            or env.get("O365_MAIL_FROM")
+            or (section.get("from") if section else "")
+            or ""
         ).strip(),
         smtp_host=str(
             env.get("CONCILIACION_SMTP_HOST") or (section.get("smtp_host") if section else "") or ""
@@ -179,6 +189,15 @@ def load_email_settings(
             default=default_use_outlook(),
         ),
         timeout=timeout,
+        o365_client_id=str(
+            env.get("O365_CLIENT_ID") or (section.get("o365_client_id") if section else "") or ""
+        ).strip(),
+        o365_client_secret=str(
+            env.get("O365_CLIENT_SECRET") or (section.get("o365_client_secret") if section else "") or ""
+        ),
+        o365_tenant_id=str(
+            env.get("O365_TENANT_ID") or (section.get("o365_tenant_id") if section else "") or ""
+        ).strip(),
     )
 
 
@@ -221,7 +240,7 @@ def send_cuadre_email(
     subject: str,
     body: str,
 ) -> str:
-    """Send attachments. Returns the transport used (``smtp`` or ``outlook``)."""
+    """Send attachments. Returns the transport used (``o365``, ``smtp``, or ``outlook``)."""
     files = _existing_attachments(attachments)
     to = parse_email_list(recipients)
     if not files:
@@ -229,6 +248,20 @@ def send_cuadre_email(
     if not to:
         raise RuntimeError("No hay destinatario de correo")
     errors: list[str] = []
+    if has_o365_transport(settings):
+        try:
+            _send_via_o365(
+                attachments=files,
+                recipients=to,
+                cc=list(settings.cc),
+                settings=settings,
+                subject=subject,
+                body=body,
+            )
+            return "o365"
+        except Exception as exc:
+            errors.append(f"o365: {exc}")
+            logger.warning("O365 Graph fallo, se intenta SMTP/Outlook si estan habilitados: %s", exc)
     if settings.smtp_host:
         try:
             _send_via_smtp(
@@ -258,7 +291,7 @@ def send_cuadre_email(
             errors.append(f"outlook: {exc}")
     if errors:
         raise RuntimeError("; ".join(errors))
-    raise RuntimeError("No hay transporte de correo (configure SMTP u Outlook)")
+    raise RuntimeError("No hay transporte de correo (configure O365_CLIENT_ID, SMTP u Outlook)")
 
 
 def deliver_cuadre_email(
@@ -283,7 +316,7 @@ def deliver_cuadre_email(
             error="sin destinatario (user.email de Skipper o campo correo)",
         )
     if not has_email_transport(settings):
-        msg = "sin transporte de correo: configure CONCILIACION_SMTP_HOST (Linux / SMTP)"
+        msg = "sin transporte de correo: configure O365_CLIENT_ID / O365_CLIENT_SECRET / O365_TENANT_ID"
         logger.warning(msg)
         return EmailDeliveryResult(
             status="skipped",
@@ -328,6 +361,43 @@ def deliver_cuadre_email(
         attachments=[str(p) for p in files],
         transport=transport,
     )
+
+
+def _send_via_o365(
+    *,
+    attachments: list[Path],
+    recipients: list[str],
+    cc: list[str],
+    settings: EmailSettings,
+    subject: str,
+    body: str,
+) -> None:
+    """Send via Microsoft Graph, same Azure app pattern as Vistazo (`O365_CLIENT_ID`)."""
+    try:
+        from O365 import Account  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError("paquete O365 no esta instalado; pip install O365") from exc
+    sender = settings.sender
+    if not sender:
+        raise RuntimeError("Falta remitente Graph (CONCILIACION_EMAIL_FROM / O365_MAIL_FROM)")
+    account = Account(
+        (settings.o365_client_id, settings.o365_client_secret),
+        auth_flow_type="credentials",
+        tenant_id=settings.o365_tenant_id,
+    )
+    if not account.authenticate():
+        raise RuntimeError("O365 authentication failed")
+    mailbox = account.mailbox(resource=sender)
+    msg = mailbox.new_message()
+    msg.to.add(recipients)
+    if cc:
+        msg.cc.add(cc)
+    msg.subject = subject
+    msg.body = body
+    for path in attachments:
+        msg.attachments.add(str(path.resolve()))
+    if not msg.send():
+        raise RuntimeError("O365 msg.send() returned False")
 
 
 def _send_via_smtp(

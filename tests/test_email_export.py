@@ -75,6 +75,22 @@ def test_load_email_settings_reads_ini_and_env() -> None:
     assert settings.enabled is True
 
 
+def test_load_email_settings_reads_o365_env() -> None:
+    settings = load_email_settings(
+        None,
+        environ={
+            "O365_CLIENT_ID": "app-id",
+            "O365_CLIENT_SECRET": "secret",
+            "O365_TENANT_ID": "tenant-id",
+            "CONCILIACION_EMAIL_FROM": "bot@amaral.com.py",
+        },
+    )
+    assert settings.o365_client_id == "app-id"
+    assert settings.o365_tenant_id == "tenant-id"
+    assert settings.sender == "bot@amaral.com.py"
+    assert has_email_transport(settings) is True
+
+
 def test_send_cuadre_email_uses_smtp_when_host_set(tmp_path: Path, monkeypatch) -> None:
     out = tmp_path / "CUADRE_469_reconciliacion.xlsx"
     out.write_bytes(b"xlsx")
@@ -125,6 +141,79 @@ def test_send_cuadre_email_uses_smtp_when_host_set(tmp_path: Path, monkeypatch) 
     assert "CUADRE_469_reconciliacion.xlsx" in str(captured["message"])
 
 
+def test_send_cuadre_email_uses_o365_graph(tmp_path: Path, monkeypatch) -> None:
+    import types
+
+    out = tmp_path / "CUADRE_469_reconciliacion.xlsx"
+    out.write_bytes(b"xlsx")
+    captured: dict[str, object] = {"files": []}
+
+    class _Bag:
+        def add(self, value):
+            captured[self._key] = value
+
+        def __init__(self, key):
+            self._key = key
+
+    class _Attachments:
+        def add(self, value):
+            captured["files"].append(value)
+
+    class _Msg:
+        def __init__(self):
+            self.to = _Bag("to")
+            self.cc = _Bag("cc")
+            self.attachments = _Attachments()
+            self.subject = ""
+            self.body = ""
+
+        def send(self):
+            captured["sent"] = True
+            captured["subject"] = self.subject
+            return True
+
+    class _Mailbox:
+        def new_message(self):
+            return _Msg()
+
+    class _Account:
+        def __init__(self, credentials, auth_flow_type=None, tenant_id=None):
+            captured["credentials"] = credentials
+            captured["auth_flow_type"] = auth_flow_type
+            captured["tenant_id"] = tenant_id
+
+        def authenticate(self):
+            return True
+
+        def mailbox(self, resource=None):
+            captured["resource"] = resource
+            return _Mailbox()
+
+    fake = types.ModuleType("O365")
+    fake.Account = _Account
+    monkeypatch.setitem(__import__("sys").modules, "O365", fake)
+
+    transport = send_cuadre_email(
+        attachments=[out],
+        recipients=["user@amaral.com.py"],
+        settings=EmailSettings(
+            sender="bot@amaral.com.py",
+            o365_client_id="app-id",
+            o365_client_secret="secret",
+            o365_tenant_id="tenant-id",
+            use_outlook=False,
+        ),
+        subject="CUADRE test",
+        body="adjunto",
+    )
+    assert transport == "o365"
+    assert captured["auth_flow_type"] == "credentials"
+    assert captured["resource"] == "bot@amaral.com.py"
+    assert captured["to"] == ["user@amaral.com.py"]
+    assert captured["sent"] is True
+    assert any("CUADRE_469" in str(p) for p in captured["files"])
+
+
 def test_deliver_skips_without_smtp_on_linux_settings(tmp_path: Path) -> None:
     out = tmp_path / "CUADRE_469_reconciliacion.xlsx"
     out.write_bytes(b"xlsx")
@@ -136,7 +225,7 @@ def test_deliver_skips_without_smtp_on_linux_settings(tmp_path: Path) -> None:
     )
     assert result.status == "skipped"
     assert result.to == ["user@amaral.com.py"]
-    assert result.error and "CONCILIACION_SMTP_HOST" in result.error
+    assert result.error and "O365_CLIENT_ID" in result.error
 
 
 def test_deliver_skips_without_recipient(tmp_path: Path) -> None:

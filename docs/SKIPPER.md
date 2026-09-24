@@ -15,10 +15,10 @@ El cliente usa la UI de Skipper. Cabo descarga adjuntos, Kowalski llama `run_cab
 | `SKIPPER_API_BASE_URL` | Ejemplo: `http://192.168.0.61:8080` |
 | `SKIPPER_API_TOKEN` | Token de servicio (nunca en git) |
 | `CONCILIACION_EMAIL_TO` | Destinatarios extra (el usuario Skipper ya recibe el correo) |
-| `CONCILIACION_SMTP_HOST` | SMTP (unico transporte en Linux; tipico `smtp.office365.com`) |
-| `CONCILIACION_SMTP_USER` | Usuario SMTP |
-| `CONCILIACION_SMTP_PASSWORD` | Clave SMTP (nunca en git) |
-| `CONCILIACION_EMAIL_FROM` | Remitente SMTP |
+| `O365_CLIENT_ID` | Azure app (la misma que Vistazo). Graph Mail.Send |
+| `O365_CLIENT_SECRET` | Secreto de esa app (nunca en git) |
+| `O365_TENANT_ID` | Tenant Azure |
+| `CONCILIACION_EMAIL_FROM` | Buzon remitente (`Mail.Send` application) |
 
 Opcional: copie [`config/cabo_config.ini.example`](../config/cabo_config.ini.example) a `config/cabo_config.ini` (gitignored) para `base_url` y `salida_root` en pruebas locales.
 
@@ -69,7 +69,7 @@ Header: `Authorization: Bearer {SKIPPER_API_TOKEN}`. Si Skipper exige `POST` en 
     "status": "ok",
     "to": ["usuario@amaral.com.py"],
     "attachments": [".../CUADRE_469_reconciliacion.xlsx"],
-    "transport": "smtp"
+    "transport": "o365"
   }
 }
 ```
@@ -80,7 +80,7 @@ Codigos de salida:
 - `2` — faltan insumos / `EXECUTION_ID` / carpeta de adjuntos
 - `1` — error de API, tecnico, o corrida parcial
 
-Archivos: `salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx` y `salidas/<execution_id>/logs/`. Los CUADRE se envian por correo cuando hay transporte: **SMTP** en Linux (`CONCILIACION_SMTP_HOST`), **Outlook** en Windows si SMTP no esta configurado. Sin SMTP en Linux el correo se omite y los Excel quedan en disco.
+Archivos: `salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx` y `salidas/<execution_id>/logs/`. Los CUADRE se envian por **Microsoft Graph** (`O365_CLIENT_ID` / `SECRET` / `TENANT_ID` + `CONCILIACION_EMAIL_FROM`). Sin esas variables el correo se omite y los Excel quedan en disco.
 
 ## Prueba local (sin API)
 
@@ -112,10 +112,10 @@ py -3 scripts\skipper_run.py --insumos C:\temp\cf_adjuntos\exec-1 --salida C:\te
 1. Clone el repo e `pip install -r requirements.txt` (`pywin32` solo se instala en Windows).
 2. Linux: `chmod +x run_cabo.sh` y apunte Kowalski a la ruta completa de `run_cabo.sh`. Windows: `run_cabo.bat`.
 3. Configure `EXECUTION_ID`, `CABO_ATTACHMENT_DIR`, `SKIPPER_API_BASE_URL`, `SKIPPER_API_TOKEN`.
-4. Linux — correo (cuando IT entregue credenciales): `CONCILIACION_SMTP_HOST` (ej. `smtp.office365.com`), `CONCILIACION_SMTP_USER`, `CONCILIACION_SMTP_PASSWORD`, `CONCILIACION_EMAIL_FROM`, puerto 587 STARTTLS. Hasta entonces los CUADRE quedan en `salidas/<id>/`.
+4. Correo: las mismas variables que Vistazo (`O365_CLIENT_ID`, `O365_CLIENT_SECRET`, `O365_TENANT_ID`) mas `CONCILIACION_EMAIL_FROM` (buzon con Mail.Send). Sin eso los CUADRE quedan en `salidas/<id>/`.
 5. En Skipper (Aldo): tipo **Personalizado + Adjuntos**, campos de la tabla de arriba.
 
-El bot **no** sube los Excel a Skipper. Copia local: `salidas/<execution_id>/`. `Finalizado` exige que la conciliacion salga bien; el correo solo es obligatorio si SMTP u Outlook estan configurados.
+El bot **no** sube los Excel a Skipper. Copia local: `salidas/<execution_id>/`. `Finalizado` exige que la conciliacion salga bien; el correo es obligatorio en vivo cuando Graph (`O365_*`) esta configurado.
 
 ## Problemas frecuentes
 
@@ -126,6 +126,6 @@ El bot **no** sube los Excel a Skipper. Copia local: `salidas/<execution_id>/`. 
 | `No se definio carpeta de adjuntos` | `CABO_ATTACHMENT_DIR` |
 | `No se encontraron archivos mayorpc` | Nombres de adjuntos o ZIP sin `mayorpc*.txt` |
 | `Falta EXECUTION_ID` | Kowalski no inyecto el id de la corrida |
-| `No se pudo enviar el correo` / `outlook:` | Windows: Outlook sin perfil. Linux: falta o fallo SMTP (`CONCILIACION_SMTP_HOST`) |
-| `sin transporte de correo` / `CONCILIACION_SMTP_HOST` | Linux sin SMTP: el correo se omite a proposito; los Excel estan en `salidas/` |
+| `No se pudo enviar el correo` / `o365:` | Revise `O365_CLIENT_ID`, `O365_CLIENT_SECRET`, `O365_TENANT_ID`, `CONCILIACION_EMAIL_FROM` y permiso Mail.Send |
+| `sin transporte de correo` | Faltan las variables O365; los Excel estan en `salidas/` |
 | `sin destinatario` | El JSON de Skipper no trajo `user.email`; pida a Aldo o use el campo `correo` |

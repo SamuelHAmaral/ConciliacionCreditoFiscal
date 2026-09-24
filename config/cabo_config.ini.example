@@ -1,5 +1,5 @@
 ; Copy to config/cabo_config.ini for local smoke tests. Do not put secrets in git.
-; Production: set SKIPPER_API_BASE_URL and SKIPPER_API_TOKEN on the Kowalski / RDP account.
+; Production: set SKIPPER_API_* and O365_* on the Kowalski account (not in this file).
 
 [api]
 base_url = http://192.168.0.61:8080
@@ -13,19 +13,15 @@ status_method = PUT
 salida_root = salidas
 
 [email]
-; CUADRE files are emailed to Skipper data.user.email. Optional extra recipients:
+; CUADRE files go to Skipper data.user.email via Microsoft Graph (same Azure app as Vistazo).
+; Prefer env vars on Kowalski: O365_CLIENT_ID, O365_CLIENT_SECRET, O365_TENANT_ID,
+; CONCILIACION_EMAIL_FROM. Local-only copies can go here (gitignored cabo_config.ini).
 to =
 cc =
 from =
-; Linux: set smtp_host (Office 365 typical: smtp.office365.com port 587).
-; Windows: empty smtp_host uses Outlook. Linux never uses Outlook.
-smtp_host =
-smtp_port = 587
-smtp_user =
-smtp_password_env = CONCILIACION_SMTP_PASSWORD
-starttls = true
-; Leave empty to default: true on Windows, false on Linux.
-; use_outlook =
+o365_client_id =
+o365_client_secret =
+o365_tenant_id =
 enabled = true
 timeout_seconds = 30
-        
+use_outlook = false

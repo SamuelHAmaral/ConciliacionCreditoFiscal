@@ -28,7 +28,7 @@ $env:PYTHONPATH = "src;."
 py -3 -m pytest tests/ -q
 ```
 
-Apunte Kowalski a `run_cabo.sh` (Linux) o `run_cabo.bat` (Windows). Variables y campos: [`docs/SKIPPER.md`](SKIPPER.md). En Linux el correo espera `CONCILIACION_SMTP_HOST` (Office 365); hasta entonces los CUADRE quedan en `salidas/`.
+Apunte Kowalski a `run_cabo.sh` (Linux) o `run_cabo.bat` (Windows). Variables y campos: [`docs/SKIPPER.md`](SKIPPER.md). El correo usa las mismas `O365_*` que Vistazo; hasta entonces los CUADRE quedan en `salidas/`.
 
 ## Que no va en git
 

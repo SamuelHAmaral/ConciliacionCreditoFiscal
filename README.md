@@ -30,7 +30,7 @@ Suba **archivos sueltos** (no una carpeta). El nombre original debe identificar 
 
 Skipper guarda un *upload name*; el bot lo mapea con `file_original_names`. Token: variable `SKIPPER_API_TOKEN` en el servidor, o local `config/cabo_config.ini` (gitignored).
 
-Salidas: `salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx`. Correo a `data.user.email` por SMTP en Linux (`CONCILIACION_SMTP_HOST`) o Outlook en Windows. Sin SMTP en Linux los archivos quedan en disco. API de estado: GET/PUT `/api/execution/{id}` (`En Ejecución` / `Finalizado`).
+Salidas: `salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx`. Correo a `data.user.email` por Microsoft Graph (`O365_CLIENT_ID`, misma app que Vistazo). Sin esas variables los archivos quedan en disco. API de estado: GET/PUT `/api/execution/{id}` (`En Ejecución` / `Finalizado`).
 
 ## Desarrollo local
 

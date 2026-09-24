@@ -60,15 +60,15 @@ Concilia cada cuenta que tenga mayor
 Escribe salidas/<execution_id>/CUADRE_*_reconciliacion.xlsx
         |
         v
-Email a data.user.email si hay SMTP (Linux) u Outlook (Windows)
+Email a data.user.email via Microsoft Graph (O365_CLIENT_ID)
         |
         v
 PUT  misma URL   {"status": "Finalizado"}   si todas las cuentas pedidas salieron bien
-     (el correo es obligatorio solo si SMTP u Outlook estan configurados)
+     (el correo es obligatorio si O365 esta configurado)
 Imprime JSON en stdout para Kowalski
 ```
 
-Los Excel CUADRE **no** se suben a Skipper. Copia local: `salidas/<id>/`. En Linux, sin `CONCILIACION_SMTP_HOST` el correo se omite y los archivos quedan en disco.
+Los Excel CUADRE **no** se suben a Skipper. Copia local: `salidas/<id>/`. Sin `O365_CLIENT_ID` el correo se omite y los archivos quedan en disco.
 
 Si falla, el bot **no** manda `Finalizado` (Skipper no definio un estado de error). La UI puede quedar en **En Ejecucion**.
 
@@ -90,10 +90,8 @@ El GET trae `attachments`, `file_original_names` (upload → original) y `revers
 | `SKIPPER_API_BASE_URL` | Ej. `http://192.168.0.61:8080` |
 | `SKIPPER_API_TOKEN` | Token Bearer (**nunca** en git) |
 | `CONCILIACION_EMAIL_TO` | Destinatarios extra (coma). El usuario Skipper ya recibe el correo |
-| `CONCILIACION_EMAIL_FROM` | Remitente SMTP (Linux / Office 365) |
-| `CONCILIACION_SMTP_HOST` | SMTP. En Linux es el unico transporte. Vacio en Windows: Outlook |
-| `CONCILIACION_SMTP_USER` | Usuario SMTP |
-| `CONCILIACION_SMTP_PASSWORD` | Clave SMTP (**nunca** en git) |
+| `O365_CLIENT_ID` / `O365_CLIENT_SECRET` / `O365_TENANT_ID` | Graph, misma app que Vistazo |
+| `CONCILIACION_EMAIL_FROM` | Buzon remitente Graph |
 
 Pruebas locales: `config/cabo_config.ini` (gitignored). Copie desde `config/cabo_config.ini.example`. `[api] token = ...` es solo para su PC; en produccion use la variable de entorno.
 
@@ -158,7 +156,7 @@ Diseno del CUADRE: primero filas cruzadas (formula CRUCE = importe mayor − IVA
 | `src/reconcile/matcher.py` | 1 a 1 importe+fecha o solo importe |
 | `src/pipeline/run_reconciliation.py` | Una cuenta de punta a punta |
 | `src/reporting/cuadre_writer.py` | Excel CUADRE |
-| `src/reporting/email_export.py` | Correo CUADRE: SMTP (Linux / opcional) u Outlook (Windows) |
+| `src/reporting/email_export.py` | Correo CUADRE via Microsoft Graph (`O365_*`) |
 | `config/accounts.yml` | Timbrado, tipo, `match_mode` — ver [`MANTENIMIENTO.md`](MANTENIMIENTO.md) |
 | `config/skipper_job.json` | Contrato del formulario Skipper |
 | `config/cabo_config.ini` | URL/token local (gitignored) |

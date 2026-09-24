@@ -289,6 +289,22 @@ def test_main_live_api_email_failure_skips_finalizado(tmp_path: Path, cabo, caps
         return ("40668", log, audit, [AccountRunResult(account="469", ok=True, output=out)])
 
     monkeypatch.setattr(cabo, "run_batch", fake_run_batch)
+
+    real_settings = cabo.load_cabo_settings
+
+    def patched_settings(path=None):
+        settings = real_settings(path)
+        settings["email"] = EmailSettings(
+            enabled=True,
+            use_outlook=False,
+            o365_client_id="app-id",
+            o365_client_secret="secret",
+            o365_tenant_id="tenant-id",
+            sender="bot@amaral.com.py",
+        )
+        return settings
+
+    monkeypatch.setattr(cabo, "load_cabo_settings", patched_settings)
     monkeypatch.setattr(
         cabo,
         "deliver_cuadre_email",
@@ -296,7 +312,7 @@ def test_main_live_api_email_failure_skips_finalizado(tmp_path: Path, cabo, caps
             status="error",
             to=["user@amaral.com.py"],
             attachments=[str(p) for p in (kwargs.get("attachments") or [])],
-            error="outlook: perfil no disponible",
+            error="o365: authentication failed",
         ),
     )
     monkeypatch.setenv("SKIPPER_API_BASE_URL", "http://192.168.0.61:8080")
@@ -375,7 +391,7 @@ def test_main_live_api_linux_without_smtp_still_finalizado(tmp_path: Path, cabo,
     assert code == 0
     assert captured["status"] == "ok"
     assert captured["email"]["status"] == "skipped"
-    assert "CONCILIACION_SMTP_HOST" in (captured["email"].get("error") or "")
+    assert "O365_CLIENT_ID" in (captured["email"].get("error") or "")
     assert statuses == ["En Ejecución", "Finalizado"]
 
 
